@@ -299,6 +299,28 @@
   .rewards .reward div { font-size: .85em; color: var(--muted); }
   .rb { background: linear-gradient(90deg, #FF5A5F, #FF9F1C, #FFD93D, #6BCB77, #4D96FF, #9B5DE5); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .hero-card.saved .name { background: linear-gradient(90deg, #FF5A5F, #FF9F1C, #FFD93D, #6BCB77, #4D96FF, #9B5DE5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  #curtain { position: fixed; inset: 0; z-index: 14; background: #05030C; opacity: 0; pointer-events: none; transition: opacity 2s ease; }
+  #curtain.on { opacity: 1; transition-duration: 1.8s; }
+  #title { position: fixed; inset: 0; z-index: 13; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.6vh; padding: 0 var(--gutter-r) 0 var(--gutter-l); box-sizing: border-box; text-align: center;
+    background: radial-gradient(ellipse at 50% 45%, rgba(20, 10, 46, .35), rgba(5, 3, 12, .92) 75%); opacity: 0; transition: opacity 2.4s ease; }
+  #title.in { opacity: 1; }
+  #title.out { opacity: 0; transition-duration: 1.8s; }
+  .tpre { margin: 0; font: 600 clamp(15px, 2.8vmin, 24px)/1 var(--pixel); color: var(--muted); letter-spacing: .18em; text-transform: uppercase; opacity: 0; animation: tfade 1.4s 1.6s ease forwards; }
+  .tname { margin: 0; font: 700 clamp(46px, 11vmin, 120px)/1.02 var(--pixel); letter-spacing: .03em; text-wrap: balance; }
+  .tname .tw { display: inline-block; white-space: nowrap; }
+  .tname .tw span { display: inline-block; color: #fff; text-shadow: 0 0 8px var(--c), 0 0 26px var(--c), 4px 4px 0 #2A0F3A; opacity: 0; transform: translateY(-30px); animation: tdrop .7s calc(.4s + var(--d)) steps(7) forwards, tglow 3s calc(2s + var(--d)) ease-in-out infinite; }
+  .tghosts { display: flex; gap: clamp(10px, 3vmin, 34px); align-items: flex-end; }
+  .tghosts img { height: clamp(44px, 9vmin, 90px); image-rendering: pixelated; opacity: 0; animation: tfade 1s calc(2.2s + var(--i) * .15s) ease forwards, tfloat 2.4s calc(var(--i) * .3s) ease-in-out infinite; }
+  .tking { position: absolute; top: 4vh; opacity: 0; animation: tfade 3s 2.8s ease forwards; }
+  .tking img { height: clamp(70px, 15vmin, 150px); image-rendering: pixelated; filter: drop-shadow(0 0 18px #9B4DFF) brightness(.85); animation: tfloat 4s ease-in-out infinite; }
+  .ttap { margin: 2vh 0 0; font: 700 clamp(20px, 4vmin, 34px)/1 var(--pixel); color: var(--gold); text-shadow: 0 0 12px var(--gold); opacity: 0; animation: tfade .8s 3.2s ease forwards, tblink 1.4s 4s steps(2) infinite; }
+  @keyframes tdrop { to { opacity: 1; transform: none; } }
+  @keyframes tfade { to { opacity: 1; } }
+  @keyframes tfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  @keyframes tglow { 0%, 100% { filter: none; } 50% { filter: brightness(1.25); } }
+  @keyframes tblink { 50% { opacity: .35; } }
+  @media (max-aspect-ratio: 1/1) { .tking { top: 10vh; } }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .05s !important; }
   }
@@ -307,6 +329,14 @@
 <canvas id="scene" aria-label="Your neighborhood at dusk. Tap to walk, or drag to steer."></canvas>
 <div id="stick" hidden><div id="knob"></div></div>
 <div id="fade"></div>
+<div id="curtain"></div>
+<div id="title" hidden role="button" tabindex="0" aria-label="Tap to start">
+  <div class="tking"><img class="px" id="titleKing" alt=""></div>
+  <p class="tpre">A spooky-cozy pixel adventure</p>
+  <h1 id="titleName" class="tname"></h1>
+  <div class="tghosts" id="titleGhosts"></div>
+  <p class="ttap">Tap to start</p>
+</div>
 
 <div class="hud tl" id="hudL" hidden>
   <button class="sq" id="homeBtn" aria-label="Pick a different hero">
@@ -1289,7 +1319,7 @@ function showPick() {
   friends = []; deco = null; decoShown = null;
   enemies = []; pickups = []; shots = []; eshots = []; boss = null;
   $('pick').hidden = false;
-  if (!store.get('seenStory', false)) setTimeout(startStory, 400); else say('pick');
+  if (titleUp) $('pick').hidden = true; else if (!store.get('seenStory', false)) setTimeout(startStory, 400); else say('pick');
   cam.x = (OUTMAP.w * TS - VW) / 2; cam.y = 3 * TS;
   paused = false;
 }
@@ -4120,12 +4150,40 @@ function setShopTab(t) {
 $('tabWear').addEventListener('click', () => setShopTab('wear'));
 $('tabHome').addEventListener('click', () => setShopTab('home'));
 
+// ================================================================ title screen: the name glows in over the sleeping town, then a slow fade into the story
+let titleUp = true;
+function showTitle() {
+  const el = $('title');
+  const word = (w, k0) => [...w].map((ch, i) => `<span style="--c:${RAINBOW[(k0 + i) % 6]};--d:${(k0 + i) * 0.07}s">${ch}</span>`).join('');
+  $('titleName').innerHTML = `<span class="tw">${word('Rainbow', 0)}</span> <span class="tw">${word('Ghost', 7)}</span> <span class="tw">${word('Rescue', 12)}</span>`;
+  $('titleGhosts').innerHTML = GHOSTS.map((g, i) => `<img class="px" alt="" src="${SPR.ghostURL[g.id]}" style="--i:${i}">`).join('');
+  $('titleKing').src = SPR.ghostURL.shadow || '';
+  $('pick').hidden = true; el.hidden = false;
+  requestAnimationFrame(() => el.classList.add('in'));
+}
+function leaveTitle() {
+  if (!titleUp) return;
+  titleUp = false; audio();
+  [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.07, null, i * 0.16));
+  tone(98, 2.2, 'sawtooth', 0.04, 49, 0.5);
+  const el = $('title'), cu = $('curtain');
+  el.classList.add('out'); cu.classList.add('on');
+  setTimeout(() => {
+    el.hidden = true;
+    startStory();
+    setTimeout(() => cu.classList.remove('on'), 300);
+  }, 2000);
+}
+$('title').addEventListener('click', leaveTitle);
+addEventListener('keydown', (e) => { if (titleUp && !$('title').hidden && (e.key === 'Enter' || e.key === ' ')) leaveTitle(); });
+
 buildSprites();
 buildSPR3();
 drawSound();
 resize();
 buildPick();
 showPick();
+showTitle();
 requestAnimationFrame(frame);
 window.__g = { get state() { return state; }, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; } };
 </script>
