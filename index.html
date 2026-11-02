@@ -1098,7 +1098,7 @@ const store = {
 let ac = null, muted = store.get('muted', false);
 function audio() {
   if (muted) return null;
-  try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch { ac = null; }
+  try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state !== 'running') ac.resume(); } catch { ac = null; }
   return ac;
 }
 function tone(f, dur = 0.15, type = 'square', vol = 0.06, f2 = null, delay = 0) {
@@ -4166,7 +4166,7 @@ function leaveTitle() {
   const heard = ac && ac.state === 'running' && !muted;
   if (!heard && !titleTapped && !muted) {
     // tablets only allow sound after a tap: this tap starts the music, the next one starts the game
-    titleTapped = true; musicCtx(); if (ac) ac.resume(); titleLock = true; setTimeout(() => titleLock = false, 600);
+    titleTapped = true; unlockAudio(); titleLock = true; setTimeout(() => titleLock = false, 600);
     $('title').querySelector('.ttap').textContent = 'Tap again to begin!';
     return;
   }
@@ -4318,6 +4318,26 @@ function musicPick() {
   else if (cur && cur.field && cur !== OUTMAP) { want = 'field'; tr = LAND_TR[cur.landId] || 0; }
   playMusic(want, tr);
 }
+// iPads and iPhones: ask for the media channel so the silent switch doesn't mute the game, and wake the sound on every touch
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+let unlockEl = null;
+function silentWavURL() {
+  const n = 4410, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 22050, true); v.setUint32(28, 44100, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function unlockAudio() {
+  if (muted) return;
+  if (!musicCtx()) return;
+  if (ac.state !== 'running') ac.resume().catch(() => {});
+  try { const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); } catch {}
+  if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document && !unlockEl) {
+    try { unlockEl = new Audio(silentWavURL()); unlockEl.loop = true; unlockEl.setAttribute('playsinline', ''); unlockEl.play().catch(() => { unlockEl = null; }); } catch { unlockEl = null; }
+  }
+}
+['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, unlockAudio, true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running' && !muted) ac.resume().catch(() => {}); });
 playMusic('title');
 
 buildSprites();
