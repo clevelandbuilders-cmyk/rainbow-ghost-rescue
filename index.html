@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/icon-192.png">
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><style>[hidden]{display:none!important}</style><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"></head><body><title>Rainbow Ghost Rescue</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#0E0920">
@@ -29,6 +29,8 @@
   }
   #scene { position: fixed; left: 0; top: 0; display: block; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
   img.px { image-rendering: pixelated; }
+  html, body, button, canvas, .layer { touch-action: none; -webkit-touch-callout: none; -webkit-text-size-adjust: 100%; }
+  .items, .runebag, .decoitems { touch-action: pan-y pan-x; }
   button { font-family: var(--pixel); color: var(--text); -webkit-tap-highlight-color: transparent; }
   button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
   .glowtext { color: #fff; text-shadow: 0 0 6px var(--pink), 0 0 18px var(--pink), 3px 3px 0 #3A0F3A; }
@@ -4339,6 +4341,24 @@ function unlockAudio() {
 ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, unlockAudio, true));
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running' && !muted) ac.resume().catch(() => {}); });
 playMusic('title');
+
+// iPad: never let pinches or fast double taps zoom the page (Safari ignores the viewport's no-zoom setting)
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest('.items, .runebag, .decoitems')) {
+    // stop the zoom, but still count the tap on whatever button was pressed
+    e.preventDefault();
+    const b = e.target.closest('button, [role=button]');
+    if (b && !b.disabled) b.click();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+// if the page did get zoomed somehow, keep the game sized to what is visible
+if (window.visualViewport) visualViewport.addEventListener('resize', () => resize());
 
 buildSprites();
 buildSPR3();
