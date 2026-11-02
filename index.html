@@ -1635,7 +1635,7 @@ function houseSaved() {
   setTimeout(() => {
     say('house-saved');
     sfx.win(); confetti(); setTimeout(confetti, 900);
-    lightLantern();
+    lightLantern(); musicFanfare();
     const el = $('celebrate');
     el.innerHTML = `<div class="panel"><h2 class="glowtext">House saved!</h2>
       <div class="pics"><img alt="" class="px hop" src="${SPR.heroURL[heroDef.id]}"></div>
@@ -3163,7 +3163,7 @@ function hurtBoss(dmg) {
 }
 function bossHitTest(x, y, rad) { return boss && boss.active && !boss.dying && Math.hypot(x - boss.x, y - (boss.y - 28)) < rad + 22; }
 function bossDefeated() {
-  const b = boss, gid = b.gid, def = b.def; boss = null;
+  const b = boss, gid = b.gid, def = b.def; boss = null; musicFanfare();
   setFlag('boss_' + gid); setFlag('seal_' + gid);
   for (const [tx, ty] of cur.seal.tiles) setSolid(cur, tx, ty, 0);
   $('bossBar').hidden = true;
@@ -4151,7 +4151,7 @@ $('tabWear').addEventListener('click', () => setShopTab('wear'));
 $('tabHome').addEventListener('click', () => setShopTab('home'));
 
 // ================================================================ title screen: the name glows in over the sleeping town, then a slow fade into the story
-let titleUp = true;
+let titleUp = true, titleTapped = false, titleLock = false;
 function showTitle() {
   const el = $('title');
   const word = (w, k0) => [...w].map((ch, i) => `<span style="--c:${RAINBOW[(k0 + i) % 6]};--d:${(k0 + i) * 0.07}s">${ch}</span>`).join('');
@@ -4162,7 +4162,14 @@ function showTitle() {
   requestAnimationFrame(() => el.classList.add('in'));
 }
 function leaveTitle() {
-  if (!titleUp) return;
+  if (!titleUp || titleLock) return;
+  const heard = ac && ac.state === 'running' && !muted;
+  if (!heard && !titleTapped && !muted) {
+    // tablets only allow sound after a tap: this tap starts the music, the next one starts the game
+    titleTapped = true; musicCtx(); if (ac) ac.resume(); titleLock = true; setTimeout(() => titleLock = false, 600);
+    $('title').querySelector('.ttap').textContent = 'Tap again to begin!';
+    return;
+  }
   titleUp = false; audio();
   [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.07, null, i * 0.16));
   tone(98, 2.2, 'sawtooth', 0.04, 49, 0.5);
@@ -4176,6 +4183,142 @@ function leaveTitle() {
 }
 $('title').addEventListener('click', leaveTitle);
 addEventListener('keydown', (e) => { if (titleUp && !$('title').hidden && (e.key === 'Enter' || e.key === ' ')) leaveTitle(); });
+
+// ================================================================ music: one original heroic theme ("Rainbow Rising"), rearranged for each place
+// Melody and chords are written in eighth-note steps; each place plays the same tune with its own speed, key, mood and drums.
+const THEME = {
+  // [note, length in eighths]; '.' is a rest. Section A (8 bars) then B (8 bars).
+  lead: [
+    ['D5', 3], ['A4', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
+    ['G5', 2], ['F#5', 1], ['E5', 1], ['D5', 2], ['A4', 2],
+    ['B4', 3], ['C#5', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
+    ['E5', 6], ['.', 2],
+    ['D5', 3], ['A4', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
+    ['A5', 3], ['G5', 1], ['F#5', 1], ['G5', 1], ['A5', 2],
+    ['B5', 2], ['A5', 1], ['G5', 1], ['F#5', 2], ['E5', 2],
+    ['D5', 6], ['.', 2],
+    ['B4', 2], ['C#5', 2], ['D5', 2], ['B4', 2],
+    ['A4', 4], ['F#4', 4],
+    ['G4', 2], ['A4', 2], ['B4', 2], ['D5', 2],
+    ['C#5', 6], ['A4', 2],
+    ['B4', 2], ['C#5', 2], ['D5', 2], ['F#5', 2],
+    ['E5', 4], ['D5', 2], ['C#5', 2],
+    ['D5', 2], ['E5', 2], ['F#5', 2], ['G5', 2],
+    ['A5', 6], ['.', 2],
+  ],
+  // one chord per bar: root and the two notes above it
+  chords: ['D', 'G', 'Bm', 'A', 'D', 'F#m', 'G', 'D', 'Bm', 'F#m', 'G', 'A', 'Bm', 'A', 'G', 'A'],
+};
+const CHORD = { D: ['D', 'F#', 'A'], G: ['G', 'B', 'D'], Bm: ['B', 'D', 'F#'], A: ['A', 'C#', 'E'], 'F#m': ['F#', 'A', 'C#'] };
+const PC = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, Bb: 10, B: 11 };
+// D major to D minor: F#->F, C#->C, B->Bb
+const MINOR = { 6: 5, 1: 0, 11: 10 };
+const ARR = {
+  title:  { bpm: 132, bars: [0, 16], lead: 'square', vol: 1, arp: true, bass: true, drums: 'march', tr: 0 },
+  town:   { bpm: 104, bars: [0, 8], lead: 'triangle', vol: 0.75, arp: true, bass: true, drums: null, tr: 0, soft: true },
+  field:  { bpm: 144, bars: [0, 16], lead: 'square', vol: 0.8, arp: false, bass: true, drums: 'run', tr: 0 },
+  dark:   { bpm: 84, bars: [0, 8], lead: 'triangle', vol: 0.85, arp: true, bass: true, drums: 'slow', tr: 0, minor: true, soft: true },
+  castle: { bpm: 112, bars: [8, 16], lead: 'square', vol: 0.75, arp: true, bass: true, drums: 'slow', tr: -2, minor: true },
+  boss:   { bpm: 176, bars: [8, 16], lead: 'sawtooth', vol: 0.75, arp: true, bass: true, drums: 'run', tr: -2, minor: true },
+};
+const LAND_TR = { meadow: 0, woods: -2, frost: 3, peak: 5 };
+const mus = { cur: null, want: null, step: 0, next: 0, bus: null, noise: null, timer: null, events: [], gainT: 0, tr: 0 };
+function noteHz(name, a) {
+  const m = name.match(/^([A-G][#b]?)(\d)$/); let pc = PC[m[1]], oct = +m[2];
+  if (a.minor && MINOR[pc] !== undefined) pc = MINOR[pc];
+  const midi = 12 * (oct + 1) + pc + a.tr + mus.tr;
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+// flatten the lead into a list of [startStep, note, length]
+const LEAD = (() => { const out = []; let t = 0; for (const [n, l] of THEME.lead) { if (n !== '.') out.push([t, n, l]); t += l; } return out; })();
+function musicCtx() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; } }
+  if (!mus.bus) {
+    mus.bus = ac.createGain(); mus.bus.gain.value = 0; mus.bus.connect(ac.destination);
+    const len = ac.sampleRate * 0.4, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    mus.noise = buf;
+  }
+  return ac;
+}
+function mNote(t, hz, dur, type, vol) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = hz;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01);
+  g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.02, dur - 0.05)); g.gain.linearRampToValueAtTime(0, t + dur);
+  o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + dur + 0.02);
+}
+function mDrum(t, kind) {
+  if (kind === 'kick') {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+    g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + 0.18); return;
+  }
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = mus.noise;
+  f.type = kind === 'hat' ? 'highpass' : 'bandpass'; f.frequency.value = kind === 'hat' ? 7000 : 1800;
+  const dur = kind === 'hat' ? 0.03 : 0.12, v = kind === 'hat' ? 0.08 : 0.25;
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  s.connect(f); f.connect(g); g.connect(mus.bus); s.start(t); s.stop(t + dur + 0.01);
+}
+const DRUMS = {
+  march: { kick: [0, 3, 4], snare: [2, 6, 7], hat: [0, 1, 2, 3, 4, 5, 6, 7] },
+  run: { kick: [0, 4, 5], snare: [2, 6], hat: [0, 1, 2, 3, 4, 5, 6, 7] },
+  slow: { kick: [0], snare: [4], hat: [2, 6] },
+};
+function scheduleStep(a, step, t, dt) {
+  const [b0, b1] = a.bars, total = (b1 - b0) * 8, s = b0 * 8 + (step % total), bar = Math.floor(s / 8), inBar = s % 8;
+  const lv = 0.11 * a.vol * (a.soft ? 0.8 : 1);
+  for (const [st, n, l] of LEAD) if (st === s) mNote(t, noteHz(n, a), l * dt * 0.95, a.lead, a.lead === 'sawtooth' ? lv * 0.7 : a.lead === 'triangle' ? lv * 1.6 : lv);
+  const ch = CHORD[THEME.chords[bar]];
+  if (a.bass) mNote(t, noteHz(ch[0] + (inBar % 2 ? '3' : '2'), a), dt * 0.9, 'triangle', 0.22 * a.vol);
+  if (a.arp) { const n = ch[[0, 1, 2, 1][inBar % 4]]; mNote(t, noteHz(n + '4', a), dt * 0.6, a.soft ? 'triangle' : 'square', (a.soft ? 0.07 : 0.03) * a.vol); }
+  const dr = a.drums && DRUMS[a.drums];
+  if (dr) for (const k of ['kick', 'snare', 'hat']) if (dr[k].includes(inBar)) mDrum(t, k);
+}
+function musicTick() {
+  if (!ac || ac.state !== 'running' || !mus.cur) return;
+  const a = ARR[mus.cur], dt = 60 / a.bpm / 2;
+  while (mus.next < ac.currentTime + 0.25) {
+    if (mus.next < ac.currentTime - 0.1) mus.next = ac.currentTime + 0.05;
+    scheduleStep(a, mus.step, mus.next, dt);
+    mus.step++; mus.next += dt;
+  }
+  // volume: off when muted, lower under the narrator's voice and during puzzles
+  let target = muted ? 0 : 0.55;
+  if (typeof voEl !== 'undefined' && voEl && !voEl.paused) target *= 0.35;
+  if (state === 'puzzle') target *= 0.5;
+  if (Math.abs(target - mus.gainT) > 0.01) { mus.gainT = target; mus.bus.gain.cancelScheduledValues(ac.currentTime); mus.bus.gain.setTargetAtTime(target, ac.currentTime, 0.25); }
+}
+function playMusic(name, tr = 0) {
+  if (mus.cur === name && mus.tr === tr) return;
+  if (!musicCtx()) return;
+  const switching = !!mus.cur;
+  mus.cur = name; mus.tr = tr; mus.step = 0;
+  if (switching && mus.bus) { mus.bus.gain.cancelScheduledValues(ac.currentTime); mus.bus.gain.setValueAtTime(0, ac.currentTime); mus.gainT = 0; }
+  mus.next = ac.currentTime + 0.12;
+  if (!mus.timer) mus.timer = setInterval(() => { musicPick(); musicTick(); }, 60);
+}
+// a short fanfare built from the theme's opening, for big wins
+function musicFanfare() {
+  if (!musicCtx() || ac.state !== 'running' || muted) return;
+  const t = ac.currentTime + 0.05, d = 0.11;
+  [['D5', 0, 1], ['F#5', 1, 1], ['A5', 2, 1], ['D6', 3, 5]].forEach(([n, s, l]) => mNote(t + s * d, noteHz(n, ARR.title), l * d, 'square', 0.12));
+  [['D3', 0, 8], ['A3', 0, 8]].forEach(([n, s, l]) => mNote(t + s * d, noteHz(n, ARR.title), l * d, 'triangle', 0.2));
+  mus.bus.gain.setTargetAtTime(0.1, ac.currentTime, 0.05); mus.gainT = 0.1;
+}
+// which arrangement fits right now
+function musicPick() {
+  let want = 'town', tr = 0;
+  if (typeof titleUp !== 'undefined' && titleUp) want = 'title';
+  else if (state === 'story') want = story.i >= 1 && story.i < 5 ? 'dark' : 'title';
+  else if (state === 'pick') want = 'town';
+  else if (cur && cur.castle) want = boss && boss.active && !boss.dying ? 'boss' : 'castle';
+  else if (cur && cur.field && cur !== OUTMAP) { want = 'field'; tr = LAND_TR[cur.landId] || 0; }
+  playMusic(want, tr);
+}
+playMusic('title');
 
 buildSprites();
 buildSPR3();
