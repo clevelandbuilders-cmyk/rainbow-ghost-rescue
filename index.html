@@ -302,6 +302,7 @@
   .rb { background: linear-gradient(90deg, #FF5A5F, #FF9F1C, #FFD93D, #6BCB77, #4D96FF, #9B5DE5); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .hero-card.saved .name { background: linear-gradient(90deg, #FF5A5F, #FF9F1C, #FFD93D, #6BCB77, #4D96FF, #9B5DE5); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
+  .tver { position: absolute; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(var(--gutter-r) + 4px); margin: 0; font: 600 14px/1 var(--pixel); color: #5A4C88; }
   #curtain { position: fixed; inset: 0; z-index: 14; background: #05030C; opacity: 0; pointer-events: none; transition: opacity 2s ease; }
   #curtain.on { opacity: 1; transition-duration: 1.8s; }
   #title { position: fixed; inset: 0; z-index: 13; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.6vh; padding: 0 var(--gutter-r) 0 var(--gutter-l); box-sizing: border-box; text-align: center;
@@ -338,6 +339,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
+  <p class="tver">version 14</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -4345,16 +4347,23 @@ playMusic('title');
 // iPad: never let pinches or fast double taps zoom the page (Safari ignores the viewport's no-zoom setting)
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
-let lastTouchEnd = 0;
+// The game handles every touch itself: blocking the browser's default touch handling is the only thing iPads always respect,
+// so taps are turned back into clicks here (except in lists that scroll, which keep normal touch)
+const SCROLLERS = '.items, .runebag, .decoitems';
+let touchStart = null;
+document.addEventListener('touchstart', e => {
+  if (e.target.closest && e.target.closest(SCROLLERS)) { touchStart = null; return; }
+  e.preventDefault();
+  const t = e.changedTouches[0]; touchStart = { x: t.clientX, y: t.clientY, el: e.target, n: e.touches.length };
+}, { passive: false });
 document.addEventListener('touchend', e => {
-  const now = Date.now();
-  if (now - lastTouchEnd < 350 && !e.target.closest('.items, .runebag, .decoitems')) {
-    // stop the zoom, but still count the tap on whatever button was pressed
-    e.preventDefault();
-    const b = e.target.closest('button, [role=button]');
-    if (b && !b.disabled) b.click();
-  }
-  lastTouchEnd = now;
+  if (!touchStart) return;
+  e.preventDefault();
+  const t = e.changedTouches[0], moved = Math.hypot(t.clientX - touchStart.x, t.clientY - touchStart.y);
+  const el = touchStart.el; touchStart = null;
+  if (moved >= 14 || !el || el === canvas) return;
+  const btn = el.closest && el.closest('button, [role=button]');
+  if (btn) { if (!btn.disabled) btn.click(); } else el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: t.clientX, clientY: t.clientY }));
 }, { passive: false });
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
 // if the page did get zoomed somehow, keep the game sized to what is visible
