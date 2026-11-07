@@ -921,8 +921,12 @@ function edgeTufts(c, set, r, c1, c2) {
   }
 }
 // ---------------------------------------------------------------- the neighborhood at dusk
-const OW = { w: 48, h: 32 };
-const HOUSE_X = [3, 14, 27, 38];   // tile x of each house (8 wide), houses span rows 4..10, door on row 10
+// Rainbow Town got roomier: 64x40 tiles (it was 48x32), with wider gaps between the houses, a bigger plaza,
+// and a lawn by the stream for Ollie's camp and Fennel's dock
+const OW = { w: 64, h: 40 };
+const TOWN_BX = 32;   // the beacon's column, right in the middle of town
+const TOWN_SY = 34;   // the stream's top row
+const HOUSE_X = [4, 17, 39, 52];   // tile x of each house (8 wide), houses span rows 4..10, door on row 10
 const HOUSE_Y = 4, HOUSE_H = 7, HOUSE_W = 8;
 function buildOverworld(homeIdx) {
   const m = newMap(OW.w, OW.h, 'out');
@@ -930,8 +934,8 @@ function buildOverworld(homeIdx) {
   const r = rng(7);
   // grass
   px(c, 0, 0, m.w * TS, m.h * TS, '#1D4A49');
-  for (let i = 0; i < 2600; i++) px(c, (r() * m.w * TS) | 0, (r() * m.h * TS) | 0, 2, 1, r() < 0.6 ? '#173B3E' : '#22595A');
-  for (let i = 0; i < 900; i++) { const x = (r() * m.w * TS) | 0, y = (r() * m.h * TS) | 0; px(c, x, y, 1, 2, '#2F7C6B'); px(c, x, y, 1, 1, '#47A383'); }
+  for (let i = 0; i < 4300; i++) px(c, (r() * m.w * TS) | 0, (r() * m.h * TS) | 0, 2, 1, r() < 0.6 ? '#173B3E' : '#22595A');
+  for (let i = 0; i < 1500; i++) { const x = (r() * m.w * TS) | 0, y = (r() * m.h * TS) | 0; px(c, x, y, 1, 2, '#2F7C6B'); px(c, x, y, 1, 1, '#47A383'); }
   // stone paths
   m.stone = new Set();
   const stone = (tx, ty) => {
@@ -943,41 +947,42 @@ function buildOverworld(homeIdx) {
     if (r() < 0.3) px(c, x + 4 + ((r() * 6) | 0), y + 5 + ((r() * 6) | 0), 3, 1, '#2A2440');
     if (r() < 0.25) px(c, x + 2 + ((r() * 10) | 0), y + 12, 2, 1, '#2F7C6B');
   };
-  for (let x = 2; x < 46; x++) for (const y of [12, 13]) stone(x, y);
+  for (let x = 2; x < m.w - 2; x++) for (const y of [12, 13]) stone(x, y);
   for (const hx of HOUSE_X) { stone(hx + 3, 11); stone(hx + 4, 11); }
-  for (let y = 14; y < 17; y++) { stone(23, y); stone(24, y); }
+  for (let y = 14; y < 16; y++) { stone(TOWN_BX - 1, y); stone(TOWN_BX, y); }
   // plaza ring around the rainbow beacon
-  for (let y = 16; y <= 23; y++) for (let x = 19; x <= 28; x++) {
-    const d = Math.hypot(x + 0.5 - 24, y + 0.5 - 20);
-    if (d < 4.6) stone(x, y);
+  for (let y = 14; y <= 26; y++) for (let x = TOWN_BX - 7; x <= TOWN_BX + 6; x++) {
+    const d = Math.hypot(x + 0.5 - TOWN_BX, y + 0.5 - 20);
+    if (d < 5.6) stone(x, y);
   }
   // stream with a bridge
-  for (let x = 0; x < m.w; x++) for (const y of [26, 27]) {
+  const SY = TOWN_SY;
+  for (let x = 0; x < m.w; x++) for (const y of [SY, SY + 1]) {
     px(c, x * TS, y * TS, TS, TS, '#18276A');
-    if (x >= 23 && x <= 25) continue;
+    if (x >= TOWN_BX - 1 && x <= TOWN_BX + 1) continue;
     setSolid(m, x, y, 5); m.water.push([x, y]);
   }
-  for (let x = 0; x < m.w * TS; x++) { px(c, x, 26 * TS, 1, 2, r() < 0.5 ? '#3FD0FF' : '#2A62C8'); px(c, x, 28 * TS - 1, 1, 1, '#2A62C8'); }
-  for (let x = 23; x <= 25; x++) for (const y of [26, 27]) {
+  for (let x = 0; x < m.w * TS; x++) { px(c, x, SY * TS, 1, 2, r() < 0.5 ? '#3FD0FF' : '#2A62C8'); px(c, x, (SY + 2) * TS - 1, 1, 1, '#2A62C8'); }
+  for (let x = TOWN_BX - 1; x <= TOWN_BX + 1; x++) for (const y of [SY, SY + 1]) {
     px(c, x * TS, y * TS, TS, TS, '#6B4A3A');
     for (let k = 0; k < TS; k += 4) px(c, x * TS, y * TS + k, TS, 1, '#4A3028');
   }
-  px(c, 23 * TS, 26 * TS - 2, 3 * TS, 2, '#8A6A50'); px(c, 23 * TS, 28 * TS, 3 * TS, 2, '#8A6A50');
+  px(c, (TOWN_BX - 1) * TS, SY * TS - 2, 3 * TS, 2, '#8A6A50'); px(c, (TOWN_BX - 1) * TS, (SY + 2) * TS, 3 * TS, 2, '#8A6A50');
   // glowing flowers
   const flower = (x, y, col) => { px(c, x, y, 2, 2, col); px(c, x - 1, y + 1, 1, 1, col); px(c, x + 2, y + 1, 1, 1, col); px(c, x, y + 2, 1, 2, '#2F7C6B'); m.flowers.push([x + 1, y + 1, col]); };
-  for (let i = 0; i < 70; i++) {
-    const tx = 2 + ((r() * 44) | 0), ty = 14 + ((r() * 12) | 0);
-    if (ty >= 16 && ty <= 23 && tx >= 19 && tx <= 28) continue;
-    if (tx >= 23 && tx <= 24) continue;
+  for (let i = 0; i < 120; i++) {
+    const tx = 2 + ((r() * (m.w - 4)) | 0), ty = 14 + ((r() * (SY - 14)) | 0);
+    if (ty >= 14 && ty <= 26 && tx >= TOWN_BX - 7 && tx <= TOWN_BX + 6) continue;
     flower(tx * TS + 4 + ((r() * 8) | 0), ty * TS + 4 + ((r() * 8) | 0), r() < 0.5 ? '#FF4FA0' : r() < 0.6 ? '#3DF2FF' : '#FFD23F');
   }
   // trees: trunks on the ground, canopies above everybody
   const tree = (tx, ty, pink) => { for (let i = 0; i < 12; i++) r(); scTree(c, f, m, tx, ty, 'town', pink); }; // lush trees from the scenery pass
-  for (let x = 0; x < m.w; x += 2) { tree(x, 1, (x * 7) % 5 === 0); if (x + 1 !== 23 && x + 1 !== 25) tree(x + 1, 30, (x * 3) % 7 === 0); }
-  for (let y = 2; y < 30; y += 2) { if (y === 12) continue; tree(0, y, y % 6 === 0); tree(47, y, y % 8 === 0); }
-  for (let y = 0; y < m.h; y++) { setSolid(m, 0, y); setSolid(m, 47, y); }
-  for (let x = 0; x < m.w; x++) { setSolid(m, x, 0); setSolid(m, x, 1); setSolid(m, x, 30); setSolid(m, x, 31); }
-  [[12, 7, 1], [25, 7, 0], [36, 6, 1], [2, 17, 0], [6, 21, 1], [11, 18, 0], [15, 23, 1], [38, 22, 1], [43, 17, 0], [44, 23, 1], [8, 29, 0], [18, 29, 1], [31, 29, 0], [40, 29, 1], [16, 16, 1], [31, 15, 0]]
+  for (let x = 0; x < m.w; x += 2) { tree(x, 1, (x * 7) % 5 === 0); if (x + 1 !== TOWN_BX - 1 && x + 1 !== TOWN_BX + 1) tree(x + 1, m.h - 2, (x * 3) % 7 === 0); }
+  for (let y = 2; y < m.h - 2; y += 2) { if (y === 12) continue; tree(0, y, y % 6 === 0); tree(m.w - 1, y, y % 8 === 0); }
+  for (let y = 0; y < m.h; y++) { setSolid(m, 0, y); setSolid(m, m.w - 1, y); }
+  for (let x = 0; x < m.w; x++) { setSolid(m, x, 0); setSolid(m, x, 1); setSolid(m, x, m.h - 2); setSolid(m, x, m.h - 1); }
+  [[14, 7, 1], [27, 8, 0], [36, 7, 1], [49, 7, 0], [3, 18, 0], [8, 23, 1], [14, 17, 0], [20, 22, 1], [19, 16, 1], [23, 29, 0], [17, 31, 1], [4, 28, 1],
+   [44, 27, 1], [52, 30, 0], [27, 31, 1], [40, 29, 0], [58, 27, 1], [61, 32, 0], [8, 37, 0], [20, 37, 1], [44, 37, 0], [55, 37, 1]]
     .forEach(([x, y, p]) => tree(x, y, p));
   // old stone pillars covered in moss
   const pillar = (tx, ty, broken) => {
@@ -990,7 +995,7 @@ function buildOverworld(homeIdx) {
     px(f, x + 6, y - 1, 2, 3, '#3DF2FF'); m.lights.push({ x: x + 7, y: y, r: 14, col: '#3DF2FF', a: 0.35, fl: 1 });
     setSolid(m, tx, ty);
   };
-  [[9, 16], [38, 16], [20, 24, 1], [28, 24, 1], [4, 24], [44, 20, 1]].forEach(([x, y, b]) => pillar(x, y, b));
+  [[10, 16], [51, 15], [TOWN_BX - 4, 27, 1], [TOWN_BX + 4, 27, 1], [4, 25], [61, 18, 1]].forEach(([x, y, b]) => pillar(x, y, b));
   // lamps along the path
   const lamp = (tx, ty, col) => {
     const x = tx * TS + 8, y = ty * TS + 14;
@@ -1001,18 +1006,20 @@ function buildOverworld(homeIdx) {
     m.lights.push({ x, y: y - 26, r: 46, col, a: 0.55, fl: 1 });
     setSolid(m, tx, ty);
   };
-  [[7, 14, '#FF4FA0'], [18, 14, '#3DF2FF'], [30, 14, '#3DF2FF'], [41, 14, '#FF4FA0'], [2, 15, '#FFD23F'], [45, 15, '#FFD23F']].forEach(a => lamp(...a));
+  const LAMPS = [[2, 15, '#FFD23F'], [9, 14, '#FF4FA0'], [20, 14, '#3DF2FF'], [27, 14, '#FF4FA0'], [37, 14, '#3DF2FF'], [47, 14, '#FF4FA0'], [56, 14, '#3DF2FF'], [m.w - 3, 15, '#FFD23F']];
+  LAMPS.forEach(a => lamp(...a));
   // the rainbow beacon in the plaza
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   pell(c, bx, by - 2, 16, 5, 'rgba(10,6,24,.5)');
   px(c, bx - 12, by - 8, 24, 8, '#4B4470'); px(c, bx - 12, by - 8, 24, 1, '#6A62A0'); px(c, bx + 6, by - 8, 6, 8, '#36305A');
   for (let i = 0; i < 6; i++) px(f, bx - 6 + i * 2, by - 40 + Math.abs(i - 2.5) * 4, 2, 32 - Math.abs(i - 2.5) * 6, RAINBOW[i]);
   px(f, bx - 6, by - 42, 12, 2, '#FFFFFF');
   m.lights.push({ x: bx, y: by - 24, r: 70, col: '#C77DFF', a: 0.5, fl: 2 });
-  for (let y = 19; y <= 20; y++) for (let x = 23; x <= 24; x++) setSolid(m, x, y);
-  // the Glimmer Shop: a market stall on the east side of the plaza
+  for (let y = 19; y <= 20; y++) for (let x = TOWN_BX - 1; x <= TOWN_BX; x++) setSolid(m, x, y);
+  // the Glimmer Shop: a market stall east of the plaza, past the giant tree
+  const SHOP_TX = 47;
   {
-    const x = 33 * TS, y = 19 * TS, W = 4 * TS;
+    const x = SHOP_TX * TS, y = 19 * TS, W = 4 * TS;
     pell(c, x + W / 2, y + 2 * TS + 2, W / 2 + 4, 5, 'rgba(10,6,24,.5)');
     px(c, x, y + 6, W, 2 * TS - 6, OUT); px(c, x + 1, y + 7, W - 2, 2 * TS - 8, '#6B4A3A');
     for (let k = 0; k < W; k += 8) px(c, x + k + 1, y + 7, 1, 2 * TS - 8, '#4A3028');
@@ -1025,21 +1032,21 @@ function buildOverworld(homeIdx) {
     px(f, x - 1, y - 4, 2, 12, '#241A3A'); px(f, x + W - 1, y - 4, 2, 12, '#241A3A');
     px(f, x + W / 2 - 3, y - 24, 6, 6, '#241A3A'); px(f, x + W / 2 - 2, y - 23, 4, 4, '#FFD23F');
     m.lights.push({ x: x + W / 2, y: y - 18, r: 56, col: '#FFB04A', a: 0.6, fl: 1 });
-    for (let yy = 19; yy <= 20; yy++) for (let xx = 33; xx <= 36; xx++) setSolid(m, xx, yy);
-    m.shop = { x: 35 * TS, y: 21 * TS + 6, keeper: { x: x + W / 2, y: y + 10 } };
+    for (let yy = 19; yy <= 20; yy++) for (let xx = SHOP_TX; xx <= SHOP_TX + 3; xx++) setSolid(m, xx, yy);
+    m.shop = { x: (SHOP_TX + 2) * TS, y: 21 * TS + 6, keeper: { x: x + W / 2, y: y + 10 } };
   }
   // bushes to smash (a few hide treasure)
   m.bushes = [];
   const near = (tx, ty, x0, y0, x1, y1) => tx >= x0 && tx <= x1 && ty >= y0 && ty <= y1;
-  const okBush = (tx, ty) => !solidAt(m, tx, ty) && !m.stone.has(tx + ',' + ty) && !near(tx, ty, 22, 25, 26, 28) && !near(tx, ty, 32, 18, 37, 22) && !m.bushes.some(b => Math.abs(b.tx - tx) + Math.abs(b.ty - ty) < 2);
+  const okBush = (tx, ty) => !solidAt(m, tx, ty) && !m.stone.has(tx + ',' + ty) && !near(tx, ty, TOWN_BX - 2, TOWN_SY - 1, TOWN_BX + 2, TOWN_SY + 2) && !near(tx, ty, SHOP_TX - 1, 18, SHOP_TX + 4, 22) && !m.bushes.some(b => Math.abs(b.tx - tx) + Math.abs(b.ty - ty) < 2);
   let tries = 0;
-  while (m.bushes.length < 34 && tries++ < 2000) {
-    const tx = 2 + ((r() * 44) | 0), ty = r() < 0.15 ? 2 + ((r() * 2) | 0) : r() < 0.85 ? 14 + ((r() * 12) | 0) : 28 + ((r() * 2) | 0);
+  while (m.bushes.length < 48 && tries++ < 3000) {
+    const tx = 2 + ((r() * (m.w - 4)) | 0), ty = r() < 0.15 ? 2 + ((r() * 2) | 0) : r() < 0.85 ? 14 + ((r() * (TOWN_SY - 14)) | 0) : TOWN_SY + 2 + ((r() * 2) | 0);
     if (!okBush(tx, ty)) continue;
     m.bushes.push({ tx, ty, alive: true, secret: false, t: 0 });
   }
   // secret spots: behind the houses, across the stream, in the far corners
-  [[12, 2], [36, 3], [3, 28], [44, 29], [24, 3]].forEach(([tx, ty]) => {
+  [[14, 2], [49, 3], [3, TOWN_SY + 2], [60, TOWN_SY + 3], [36, 3]].forEach(([tx, ty]) => {
     if (solidAt(m, tx, ty)) return;
     const old = m.bushes.findIndex(b => b.tx === tx && b.ty === ty); if (old >= 0) m.bushes.splice(old, 1);
     m.bushes.push({ tx, ty, alive: true, secret: true, t: 0 });
@@ -1047,7 +1054,7 @@ function buildOverworld(homeIdx) {
   m.bushes.forEach(b => setSolid(m, b.tx, b.ty, 2));
   // where critters may appear
   m.spawns = [];
-  for (let ty = 15; ty <= 29; ty++) for (let tx = 2; tx < 46; tx++) if (!solidAt(m, tx, ty) && !m.stone.has(tx + ',' + ty) && !near(tx, ty, 31, 17, 38, 23)) m.spawns.push([tx, ty]);
+  for (let ty = 15; ty <= m.h - 3; ty++) for (let tx = 2; tx < m.w - 2; tx++) if (!solidAt(m, tx, ty) && !m.stone.has(tx + ',' + ty) && !near(tx, ty, SHOP_TX - 2, 17, SHOP_TX + 5, 23)) m.spawns.push([tx, ty]);
   // houses
   m.houses = [];
   HOUSES_DEF.forEach((hd, i) => {
@@ -1127,7 +1134,7 @@ function buildOverworld(homeIdx) {
     }
   });
   const lampTop = (tx, ty) => [tx * TS + 8, ty * TS + 14 - 30];
-  [[2, 15, 7, 14], [7, 14, 18, 14], [18, 14, 30, 14], [30, 14, 41, 14], [41, 14, 45, 15]].forEach(([a, b, c2, d]) => { const [x0, y0] = lampTop(a, b), [x1, y1] = lampTop(c2, d); bunting(f, m, x0, y0, x1, y1, ['#FF4FA0', '#FFD23F', '#3DF2FF', '#7CFF6B', '#C77DFF'], true); });
+  LAMPS.slice(1).map((L, i) => [LAMPS[i][0], LAMPS[i][1], L[0], L[1]]).forEach(([a, b, c2, d]) => { const [x0, y0] = lampTop(a, b), [x1, y1] = lampTop(c2, d); bunting(f, m, x0, y0, x1, y1, ['#FF4FA0', '#FFD23F', '#3DF2FF', '#7CFF6B', '#C77DFF'], true); });
   edgeTufts(c, m.stone, rng(70), '#2F7C6B', '#47A383');
   patchTown(m);
   homeGlow(m, homeIdx);
@@ -2912,33 +2919,33 @@ function buildLand(id) {
 function patchTown(m) {
   const c = m.bg.getContext('2d');
   const stoneT = (tx, ty) => { const x = tx * TS, y = ty * TS; px(c, x, y, TS, TS, '#3A3355'); px(c, x, y, TS, 1, '#2A2440'); px(c, x, y, 1, TS, '#2A2440'); px(c, x + 1, y + 1, TS - 2, 1, '#4B4470'); };
-  for (const ty of [12, 13]) for (const tx of [0, 1, 46, 47]) { setSolid(m, tx, ty, 0); stoneT(tx, ty); }
-  for (const tx of [23, 24, 25]) for (const ty of [28, 29, 30, 31]) { setSolid(m, tx, ty, 0); stoneT(tx, ty); }
-  m.bushes = m.bushes.filter(b => { const bad = b.tx >= 22 && b.tx <= 26 && b.ty >= 28 || b.tx <= 2 && b.ty >= 11 && b.ty <= 14 || b.tx >= 45 && b.ty >= 11 && b.ty <= 14; if (bad) setSolid(m, b.tx, b.ty, 0); return !bad; });
+  for (const ty of [12, 13]) for (const tx of [0, 1, m.w - 2, m.w - 1]) { setSolid(m, tx, ty, 0); stoneT(tx, ty); }
+  for (let tx = TOWN_BX - 1; tx <= TOWN_BX + 1; tx++) for (let ty = TOWN_SY + 2; ty < m.h; ty++) { setSolid(m, tx, ty, 0); stoneT(tx, ty); }
+  m.bushes = m.bushes.filter(b => { const bad = b.tx >= TOWN_BX - 2 && b.tx <= TOWN_BX + 2 && b.ty >= TOWN_SY + 2 || b.tx <= 2 && b.ty >= 11 && b.ty <= 14 || b.tx >= m.w - 3 && b.ty >= 11 && b.ty <= 14; if (bad) setSolid(m, b.tx, b.ty, 0); return !bad; });
   m.obs = [
-    { kind: 'vines', tiles: [[23, 29], [24, 29], [25, 29]], flag: 'vines_town' },
+    { kind: 'vines', tiles: [[TOWN_BX - 1, m.h - 3], [TOWN_BX, m.h - 3], [TOWN_BX + 1, m.h - 3]], flag: 'vines_town' },
     { kind: 'rocks', tiles: [[1, 12], [1, 13]], flag: 'rocks_town' },
   ];
   for (const o of m.obs) for (const [tx, ty] of o.tiles) setSolid(m, tx, ty, flags[o.flag] ? 0 : 3);
   m.runes = []; m.switches = []; m.castles = []; m.champ = null;
   m.field = true; m.ff = true; m.landId = 'town'; m.name = 'Home';
   m.exits = [
-    { test: h => h.x > 47 * TS + 6, to: 'meadow', entry: 'town' },
+    { test: h => h.x > (m.w - 1) * TS + 6, to: 'meadow', entry: 'town' },
     { test: h => h.x < 10, to: 'frost', entry: 'town' },
-    { test: h => h.y > 31 * TS + 4, to: 'woods', entry: 'town' },
+    { test: h => h.y > (m.h - 1) * TS + 4, to: 'woods', entry: 'town' },
   ];
   m.entries = {
-    meadow: { x: 46 * TS, y: 13 * TS + 2, face: 'sideL' },
+    meadow: { x: (m.w - 2) * TS, y: 13 * TS + 2, face: 'sideL' },
     frost: { x: 2 * TS + 8, y: 13 * TS + 2, face: 'side' },
-    woods: { x: 24 * TS + 8, y: 30 * TS, face: 'up' },
-    peak: { x: 24 * TS, y: 22 * TS + 10, face: 'down' },
+    woods: { x: TOWN_BX * TS + 8, y: (m.h - 2) * TS, face: 'up' },
+    peak: { x: TOWN_BX * TS, y: 22 * TS + 10, face: 'down' },
   };
   m.signs = [
-    { x: 44 * TS + 8, y: 11 * TS + 14, ghosts: ['sunny', 'bubbles'] },
+    { x: (m.w - 4) * TS + 8, y: 11 * TS + 14, ghosts: ['sunny', 'bubbles'] },
     { x: 3 * TS - 4, y: 11 * TS + 14, ghosts: ['splash', 'blueberry'] },
-    { x: 21 * TS + 8, y: 29 * TS + 14, ghosts: ['sprout', 'cocoa'] },
+    { x: (TOWN_BX - 3) * TS + 8, y: (m.h - 3) * TS + 14, ghosts: ['sprout', 'cocoa'] },
   ];
-  m.portal = { x: 24 * TS, y: 21 * TS };
+  m.portal = { x: TOWN_BX * TS, y: 21 * TS };
   patchStation(m);
 }
 
@@ -3794,7 +3801,7 @@ const STORY = [
   { text: 'His <b>Gloomies</b> and shadow critters crept into every field, forest and frozen lake.', dur: 4.5 },
   { text: 'Only the bravest heroes can save the town. Free the ghosts, find the shards, and stop the Shadow King!', dur: 99, go: true },
 ];
-const story = { i: 0, t: 0, cx: 24 * TS, cy: 18 * TS, dusk: '#F0E8FF', king: null, ghosts: [], crits: [], shards: [], heroes: [], rain: [], flash: 0, beaconOff: false, typing: null };
+const story = { i: 0, t: 0, cx: TOWN_BX * TS, cy: 18 * TS, dusk: '#F0E8FF', king: null, ghosts: [], crits: [], shards: [], heroes: [], rain: [], flash: 0, beaconOff: false, typing: null };
 let beaconLight = null;
 function startStory() {
   if (state !== 'pick') return;
@@ -3818,7 +3825,7 @@ function nextStory() {
     if (n >= plain.length) { clearInterval(story.typing); story.typing = null; el.innerHTML = full; if (sc.go) $('storyGo').hidden = false; return; }
     el.textContent = plain.slice(0, n);
   }, 30);
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   if (story.i === 1) { story.king = { x: bx, y: by - 160, ty: by - 46 }; sfx.whoosh(); }
   if (story.i === 2) { story.beaconOff = true; shake = 0.6; for (let k = 0; k < 6; k++) { const a = -Math.PI / 2 + (k - 2.5) * 0.45; story.shards.push({ x: bx, y: by - 30, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140 - 40, col: RAINBOW[k] }); } poof(bx, by - 30, '#FFFFFF'); [880, 660, 440, 220].forEach((f, k) => tone(f, 0.25, 'square', 0.07, f / 2, k * 0.08)); }
   if (story.i === 3) { GHOSTS.forEach((g, k) => { const a = k / GHOSTS.length * Math.PI * 2; story.ghosts.push({ def: g, a, x: bx + Math.cos(a) * 220, y: by - 40 + Math.sin(a) * 140 }); }); sfx.giggle(); }
@@ -3846,14 +3853,14 @@ function updateStory(dt) {
     if (i === 5 && Math.abs(t - 1.2) < dt) { tone(200, 0.4, 'square', 0.06, 90); }
   }
   for (const s of story.shards) { s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 30 * dt; if (Math.random() < 0.6) poofs.push({ x: s.x, y: s.y, vx: 0, vy: 0, life: 0.5, col: s.col }); }
-  for (const g of story.ghosts) { g.a += dt * 0.5; const r = 74 + Math.sin(story.t * 2 + g.a) * 6; g.x = ease(g.x, 24 * TS + Math.cos(g.a) * r, 2); g.y = ease(g.y, 21 * TS - 56 + Math.sin(g.a) * r * 0.5, 2); }
+  for (const g of story.ghosts) { g.a += dt * 0.5; const r = 74 + Math.sin(story.t * 2 + g.a) * 6; g.x = ease(g.x, TOWN_BX * TS + Math.cos(g.a) * r, 2); g.y = ease(g.y, 21 * TS - 56 + Math.sin(g.a) * r * 0.5, 2); }
   for (const c of story.crits) { const was = c.t; c.t += dt; if (was < 0 && c.t >= 0) { poof(c.x, c.y - 8, '#9B5DE5'); tone(400, 0.08, 'triangle', 0.04, 200); } }
   for (const h of story.heroes) h.y = ease(h.y, h.ty, 2.5);
   for (const r of story.rain) { r.y += dt * 1.4 * r.s; r.x -= dt * 0.25 * r.s; if (r.y > 1) { r.y -= 1; r.x = Math.random() * 1.2; } }
   if (!STORY[story.i].go && t > story.dur && !story.typing) nextStory();
 }
 function drawStory(cx, cy) {
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   if (story.beaconOff) { // the beacon, broken and dark
     ctx.fillStyle = '#241A3A'; ctx.fillRect(bx - 7 - cx, by - 44 - cy, 14, 34);
     ctx.fillStyle = '#4B4470'; ctx.fillRect(bx - 5 - cx, by - 20 - cy, 3, 10); ctx.fillRect(bx + 2 - cx, by - 16 - cy, 3, 6);
@@ -3875,7 +3882,7 @@ function storyTop(cx, cy) {
   for (const g of story.ghosts) { ctx.globalAlpha = 0.5; ctx.drawImage(glow('#9B4DFF', 18), Math.round(g.x - 18 - cx), Math.round(g.y - 18 - 18 - cy)); }
   for (const s of story.shards) { ctx.globalAlpha = 0.9; ctx.drawImage(glow(s.col, 12), Math.round(s.x - 12 - cx), Math.round(s.y - 12 - cy)); }
   for (const h of story.heroes) { ctx.globalAlpha = 0.45; ctx.drawImage(glow(h.def.glow, 22), Math.round(h.x - 22 - cx), Math.round(h.y - 14 - 22 - cy)); }
-  if (story.i === 0 && beaconLight) { ctx.globalAlpha = 0.35 + 0.1 * Math.sin(clock * 2); for (let k = 0; k < 6; k++) ctx.drawImage(glow(RAINBOW[k], 40), Math.round(24 * TS + (k - 2.5) * 10 - 40 - cx), Math.round(21 * TS - 40 - 40 - cy)); }
+  if (story.i === 0 && beaconLight) { ctx.globalAlpha = 0.35 + 0.1 * Math.sin(clock * 2); for (let k = 0; k < 6; k++) ctx.drawImage(glow(RAINBOW[k], 40), Math.round(TOWN_BX * TS + (k - 2.5) * 10 - 40 - cx), Math.round(21 * TS - 40 - 40 - cy)); }
   ctx.globalCompositeOperation = 'source-over';
   if (story.i >= 1 && story.i <= 4) { ctx.globalAlpha = 0.5; ctx.fillStyle = '#BDC8FF'; for (const r of story.rain) ctx.fillRect(Math.round(r.x * VW), Math.round(r.y * VH), 1, 5); }
   if (story.flash > 0) { ctx.globalAlpha = story.flash * 0.8; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, VW, VH); }
@@ -3982,7 +3989,7 @@ function runeHit(e, depth = 0) {
 function addRuneSpots(m, land) {
   m.gemSpots = [];
   const r = rng(land.length * 977 + land.charCodeAt(0) * 31 + 5), want = land === 'town' ? 2 : 3;
-  const start = land === 'town' ? [24, 24] : (() => { const e = m.entries.town; return [Math.floor(e.x / TS), Math.floor(e.y / TS)]; })();
+  const start = land === 'town' ? [TOWN_BX, 24] : (() => { const e = m.entries.town; return [Math.floor(e.x / TS), Math.floor(e.y / TS)]; })();
   // which tiles can you walk to (bushes and gates can be cleared, so they count as open)
   const ok = new Uint8Array(m.w * m.h), q = [start];
   const pass = (x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h && [0, 2, 3].includes(m.solid[y * m.w + x]);
@@ -3993,7 +4000,7 @@ function addRuneSpots(m, land) {
     if (!ok[ty * m.w + tx] || m.solid[ty * m.w + tx] !== 0) continue;
     if (Math.hypot(tx - start[0], ty - start[1]) < 10) continue;
     if (m.stone && m.stone.has(tx + ',' + ty)) continue;
-    if (land === 'town' && (ty < 14 || (tx >= 31 && tx <= 38 && ty >= 17 && ty <= 23))) continue;
+    if (land === 'town' && (ty < 14 || (tx >= 45 && tx <= 52 && ty >= 17 && ty <= 23))) continue;
     cand.push([tx, ty]);
   }
   const base = { town: 0, meadow: 2, woods: 5, frost: 8, peak: 11 }[land] || 0;
@@ -5047,7 +5054,7 @@ const ENDING = [
   { text: 'The six shards flew home, and the <b style="color:#3DF2FF;text-shadow:0 0 10px #3DF2FF">Rainbow Beacon</b> shone brighter than ever before.', dur: 6 },
   { text: 'Rainbow Town was saved, all thanks to you, brave heroes! <b style="color:#FFD23F;text-shadow:0 0 10px #FFD23F">The End.</b>', dur: 99, go: true },
 ];
-const ending = { i: -1, t: 0, vista: true, dusk: '#4E4290', cx: 24 * TS, cy: 20 * TS, fade: 0, flash: 0, parts: [], castles: [], king: null, ghosts: [], shards: [], heroes: [], typing: null, fwT: 0, arc: 0, beaconBoost: 0 };
+const ending = { i: -1, t: 0, vista: true, dusk: '#4E4290', cx: TOWN_BX * TS, cy: 20 * TS, fade: 0, flash: 0, parts: [], castles: [], king: null, ghosts: [], shards: [], heroes: [], typing: null, fwT: 0, arc: 0, beaconBoost: 0 };
 const greyCache = {};
 function greySprite(img) {
   const k = img.__id || (img.__id = Math.random().toString(36).slice(2));
@@ -5096,7 +5103,7 @@ function nextEnding() {
     if (n >= plain.length) { clearInterval(ending.typing); ending.typing = null; el.innerHTML = full; if (sc.go) $('storyGo').hidden = false; return; }
     el.textContent = plain.slice(0, n);
   }, 30);
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   if (ending.i === 3) { // to town: the ghosts arrive grey, then one by one their colors come back
     ending.vista = false; ending.flash = 1;
     ending.dusk = '#5A4E9E';
@@ -5134,19 +5141,19 @@ function updateEnding(dt) {
     });
     for (const c of ending.castles) if (c.crumble >= 0) { c.crumble += dt; if (Math.random() < dt * 14 && c.crumble < 2) epart(VW * c.fx + rand(-20, 20) * (c.big ? 1.5 : 0.6), VH * c.fy, '#8A7DAA', 2, 25); }
   } else {
-    ending.cx = 24 * TS; ending.cy = 21 * TS - 14;
+    ending.cx = TOWN_BX * TS; ending.cy = 21 * TS - 14;
     const want = i >= 4 ? (ending.beaconBoost > 0.5 ? '#FFF4E8' : '#B8AEE6') : '#7468B8';
     ending.dusk = mixHex(ending.dusk, want, 1 - Math.exp(-dt * 1.5));
     for (const g of ending.ghosts) {
       g.a += dt * (g.freed ? 1.1 : 0.4);
       const r = g.freed ? 80 + Math.sin(ending.t * 3 + g.a) * 10 : 70;
-      g.x = ease(g.x, 24 * TS + Math.cos(g.a) * r, 3); g.y = ease(g.y, 21 * TS - 52 + Math.sin(g.a) * r * 0.45 - (g.freed ? Math.abs(Math.sin(ending.t * 4 + g.a)) * 8 : 0), 3);
+      g.x = ease(g.x, TOWN_BX * TS + Math.cos(g.a) * r, 3); g.y = ease(g.y, 21 * TS - 52 + Math.sin(g.a) * r * 0.45 - (g.freed ? Math.abs(Math.sin(ending.t * 4 + g.a)) * 8 : 0), 3);
       if (i === 3 && !g.freed && t > g.free) { g.freed = true; poof(g.x, g.y - 20, g.def.color); tone(660 + GHOSTS.indexOf(g.def) * 90, 0.2, 'triangle', 0.07, 1320, 0); sfx.giggle(); }
       if (i > 3) g.freed = true;
     }
     for (const s of ending.shards) {
       if (s.done || t < s.delay) continue;
-      const tx = 24 * TS, ty = 21 * TS - 30, dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
+      const tx = TOWN_BX * TS, ty = 21 * TS - 30, dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
       const sp = Math.min(d, (120 + (t - s.delay) * 160) * dt); s.x += dx / (d || 1) * sp; s.y += dy / (d || 1) * sp;
       if (Math.random() < 0.7) poofs.push({ x: s.x, y: s.y, vx: 0, vy: 0, life: 0.5, col: s.col });
       if (d < 3) { s.done = true; tone(784 + ending.shards.indexOf(s) * 120, 0.25, 'triangle', 0.07); if (ending.shards.every(q => q.done)) { ending.beaconBoost = 1; ending.flash = 0.9; shake = 0.3; poof(tx, ty, '#FFFFFF'); musicFanfare(); } }
@@ -5154,7 +5161,7 @@ function updateEnding(dt) {
     if (ending.beaconBoost > 0) ending.arc = Math.min(1, ending.arc + dt * 0.6);
     if (beaconLight) beaconLight.a = 0.5 + ending.beaconBoost * 0.5;
     for (const h of ending.heroes) h.y = ease(h.y, h.ty, 2.5);
-    if (i === 5) { ending.fwT -= dt; if (ending.fwT <= 0) { ending.fwT = rand(0.35, 0.8); const x = 24 * TS + rand(-130, 130), y = 21 * TS - rand(90, 150); for (let n = 0; n < 30; n++) { const a = n / 30 * Math.PI * 2, s = rand(50, 80), col = RAINBOW[(n + (x | 0)) % 6]; poofs.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1.2, col }); } tone(rand(300, 500), 0.2, 'triangle', 0.05, 1200); } }
+    if (i === 5) { ending.fwT -= dt; if (ending.fwT <= 0) { ending.fwT = rand(0.35, 0.8); const x = TOWN_BX * TS + rand(-130, 130), y = 21 * TS - rand(90, 150); for (let n = 0; n < 30; n++) { const a = n / 30 * Math.PI * 2, s = rand(50, 80), col = RAINBOW[(n + (x | 0)) % 6]; poofs.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1.2, col }); } tone(rand(300, 500), 0.2, 'triangle', 0.05, 1200); } }
   }
   if (!ENDING[ending.i].go && t > ending.dur && !ending.typing) nextEnding();
 }
@@ -5213,7 +5220,7 @@ function drawVista() {
 }
 // ---------------------------------------------------------------- back in town
 function drawEnding(cx, cy) {
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   for (const h of ending.heroes) { const moving = Math.abs(h.y - h.ty) > 2, img = SPR.hero[h.def.id][moving ? 'up' : 'down'][moving ? Math.floor(clock * 9) % 4 : 0]; ctx.globalAlpha = 0.55; ctx.drawImage(shadowSpr, Math.round(h.x - 8 - cx), Math.round(h.y - 3 - cy)); ctx.globalAlpha = 1; ctx.drawImage(img, Math.round(h.x - 11 - cx), Math.round(h.y - 28 - cy - (moving ? 0 : Math.abs(Math.sin(clock * 5 + h.x)) * 3))); }
   for (const g of ending.ghosts) { const base = SPR.ghost[g.def.id][Math.floor(clock * 3) % 2], img = g.freed ? base : greySprite(base); ctx.drawImage(img, Math.round(g.x - 14 - cx), Math.round(g.y - 34 - cy)); }
   for (const s of ending.shards) if (!s.done && ending.t >= s.delay) { ctx.fillStyle = OUT; ctx.fillRect(Math.round(s.x - 3 - cx), Math.round(s.y - 4 - cy), 6, 8); ctx.fillStyle = s.col; ctx.fillRect(Math.round(s.x - 2 - cx), Math.round(s.y - 3 - cy), 4, 6); }
@@ -5221,11 +5228,11 @@ function drawEnding(cx, cy) {
 }
 // a rainbow across the sky over the beacon
 function drawArc(cx, cy, amt) {
-  const bx = 24 * TS, top = 21 * TS - 40, R0 = 120, n = Math.floor(80 * amt);
+  const bx = TOWN_BX * TS, top = 21 * TS - 40, R0 = 120, n = Math.floor(80 * amt);
   for (let b = 0; b < 6; b++) { const R = R0 - b * 4; for (let a = 0; a <= n; a++) { const th = Math.PI + a / 80 * Math.PI, x = Math.round(bx + Math.cos(th) * R - cx), y = Math.round(top + Math.sin(th) * R * 0.6 - cy); if (x < -4 || x > VW + 4 || y < -4 || y > VH + 4) continue; ctx.fillStyle = RAINBOW[b]; ctx.fillRect(x, y, 3, 3); } }
 }
 function endingTop(cx, cy) {
-  const bx = 24 * TS, by = 21 * TS;
+  const bx = TOWN_BX * TS, by = 21 * TS;
   ctx.globalCompositeOperation = 'lighter';
   for (const g of ending.ghosts) if (g.freed) { ctx.globalAlpha = 0.5; ctx.drawImage(glow(g.def.color, 22), Math.round(g.x - 22 - cx), Math.round(g.y - 18 - 22 - cy)); }
   for (const s of ending.shards) if (!s.done && ending.t >= s.delay) { ctx.globalAlpha = 0.9; ctx.drawImage(glow(s.col, 14), Math.round(s.x - 14 - cx), Math.round(s.y - 14 - cy)); }
@@ -5244,7 +5251,7 @@ function endEnding() {
     // the Shadow King's treasure: the rainbow power
     if (!flags.power_rainbow) { setFlag('chest_shadow'); setFlag('power_rainbow'); powerSel = 'rainbow'; store.set('power', 'rainbow'); powerCharge = 1; }
     OUTMAP = buildOverworld(home); enterMap(OUTMAP, 'none');
-    hero.x = 24 * TS; hero.y = 24 * TS; hero.face = 'down';
+    hero.x = TOWN_BX * TS; hero.y = 24 * TS; hero.face = 'down';
     ['hudL', 'stars', 'coins', 'dashBtn', 'atkBtn'].forEach(id => $(id).hidden = false);
     $('tracker').hidden = true;
     state = 'play'; snapCam(); setupWeaponButton(); setupPowerButton(); drawHearts(); drawCoins();
@@ -5266,7 +5273,7 @@ function peacefulWorld(m) {
   m.peace = true;
   if (m.houses) {
     m.dusk = '#E4DCFF';
-    const bx = 24 * TS, by = 21 * TS;
+    const bx = TOWN_BX * TS, by = 21 * TS;
     m.lights.push({ x: bx, y: by - 40, r: 110, col: '#FFE9B0', a: 0.35, fl: 2 });
     RAINBOW.forEach((col, k) => m.lights.push({ x: bx - 60 + k * 24, y: by - 70 - Math.sin(k / 5 * Math.PI) * 26, r: 30, col, a: 0.35, fl: 1 }));
   } else if (m.dusk) m.dusk = mixHex(m.dusk, '#FFFFFF', 0.3);
@@ -6547,29 +6554,29 @@ let trProg = store.get('train', { reached: 0, tix: {}, done: false });
 const trTix = (car) => trProg.tix[car] || (trProg.tix[car] = [0, 0, 0]);
 
 // ---------------------------------------------------------------- the station in town (east lawn, tiles x 37-46, y 16-24)
-const STATION = { mat: { tx: 41, ty: 21 } };
+const STATION = { mat: { tx: 57, ty: 21 } }; // 16 tiles east of where it first stood: the town got wider
 function patchStation(m) {
   const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(808);
   // clear the old trees and the pillar that stood here, and lay fresh grass
-  const X0 = 37 * TS, X1 = 46 * TS, Y0 = 19 * TS, Y1 = 25 * TS;
+  const o = OW.w - 48, X0 = (37 + o) * TS, X1 = (46 + o) * TS, Y0 = 19 * TS, Y1 = 25 * TS;
   f.clearRect(X0, Y0 - 6, X1 - X0, Y1 - Y0 + 6);
   px(c, X0, Y0, X1 - X0, Y1 - Y0, '#1D4A49');
   for (let i = 0; i < 260; i++) px(c, X0 + ((r() * (X1 - X0)) | 0), Y0 + ((r() * (Y1 - Y0)) | 0), 2, 1, r() < 0.6 ? '#173B3E' : '#22595A');
   for (let i = 0; i < 90; i++) { const x = X0 + ((r() * (X1 - X0)) | 0), y = Y0 + ((r() * (Y1 - Y0)) | 0); px(c, x, y, 1, 2, '#2F7C6B'); px(c, x, y, 1, 1, '#47A383'); }
-  for (let ty = 19; ty < 25; ty++) for (let tx = 37; tx < 46; tx++) setSolid(m, tx, ty, 0);
+  for (let ty = 19; ty < 25; ty++) for (let tx = 37 + o; tx < 46 + o; tx++) setSolid(m, tx, ty, 0);
   m.lights = m.lights.filter(L => !(L.x >= X0 && L.x < X1 && L.y >= Y0 - 20 && L.y < Y1));
   // stone platform and the rails running off into the trees
-  for (let tx = 38; tx <= 46; tx++) for (const ty of [20, 21]) {
+  for (let tx = 38 + o; tx <= 46 + o; tx++) for (const ty of [20, 21]) {
     const x = tx * TS, y = ty * TS;
     px(c, x, y, TS, TS, '#3A3355'); px(c, x, y, TS, 1, '#2A2440'); px(c, x, y, 1, TS, '#2A2440'); px(c, x + 1, y + 1, TS - 2, 1, '#4B4470');
   }
-  px(c, 38 * TS, 22 * TS - 2, 9 * TS, 2, '#FFC93C'); // the yellow line
+  px(c, (38 + o) * TS, 22 * TS - 2, 9 * TS, 2, '#FFC93C'); // the yellow line
   const ry = 22 * TS + 2;
-  px(c, 36 * TS, ry, 11 * TS, 12, '#2A2238');
-  for (let x = 36 * TS; x < 47 * TS; x += 6) px(c, x, ry + 1, 4, 10, '#5A3E30');
-  px(c, 36 * TS, ry + 2, 11 * TS, 2, '#A9A2D4'); px(c, 36 * TS, ry + 8, 11 * TS, 2, '#A9A2D4');
+  px(c, (36 + o) * TS, ry, 11 * TS, 12, '#2A2238');
+  for (let x = (36 + o) * TS; x < (47 + o) * TS; x += 6) px(c, x, ry + 1, 4, 10, '#5A3E30');
+  px(c, (36 + o) * TS, ry + 2, 11 * TS, 2, '#A9A2D4'); px(c, (36 + o) * TS, ry + 8, 11 * TS, 2, '#A9A2D4');
   // a little station house with a clock
-  const hx = 39 * TS + 4, hy = 16 * TS + 8;
+  const hx = (39 + o) * TS + 4, hy = 16 * TS + 8;
   pell(c, hx + 20, hy + 44, 22, 3, 'rgba(10,6,24,.45)');
   px(c, hx, hy + 12, 40, 32, OUT); px(c, hx + 1, hy + 13, 38, 31, '#E8D8B8'); px(c, hx + 1, hy + 38, 38, 6, '#B8A488');
   px(c, hx + 5, hy + 20, 10, 10, OUT); px(c, hx + 6, hy + 21, 8, 8, '#FFE2A0'); px(c, hx + 25, hy + 20, 10, 10, OUT); px(c, hx + 26, hy + 21, 8, 8, '#FFE2A0');
@@ -6582,9 +6589,9 @@ function patchStation(m) {
   px(c, hx + 46, hy + 22, 2, 22, '#3A2433'); px(c, hx + 40, hy + 12, 18, 12, OUT); px(c, hx + 41, hy + 13, 16, 10, '#2E1A52');
   for (let i = 0; i < 6; i++) px(c, hx + 43, hy + 15 + i, 12, 1, RAINBOW[i]);
   m.lights.push({ x: hx + 10, y: hy + 25, r: 18, col: '#FFC870', a: 0.5, fl: 1 }, { x: hx + 30, y: hy + 25, r: 18, col: '#FFC870', a: 0.5, fl: 1 }, { x: hx + 20, y: hy - 3, r: 14, col: '#FFF6D8', a: 0.4, fl: 0 }, { x: hx + 49, y: hy + 18, r: 16, col: '#FF9ACB', a: 0.4, fl: 1 });
-  for (let tx = 39; tx <= 41; tx++) for (const ty of [17, 18, 19]) setSolid(m, tx, ty);
+  for (let tx = 39 + o; tx <= 41 + o; tx++) for (const ty of [17, 18, 19]) setSolid(m, tx, ty);
   // the Rainbow Express engine waiting at the platform
-  const ex = 42 * TS + 2, ey = 22 * TS + 6;
+  const ex = (42 + o) * TS + 2, ey = 22 * TS + 6;
   pell(c, ex + 34, ey + 4, 36, 4, 'rgba(10,6,24,.5)');
   px(c, ex, ey - 30, 26, 30, OUT); px(c, ex + 1, ey - 29, 24, 28, '#B8323A'); px(c, ex + 5, ey - 25, 14, 10, OUT); px(c, ex + 6, ey - 24, 12, 8, '#FFE2A0');
   px(c, ex - 1, ey - 33, 28, 4, OUT); px(c, ex, ey - 32, 26, 2, '#2E1A52');
@@ -6594,13 +6601,13 @@ function patchStation(m) {
   px(c, ex + 66, ey - 18, 6, 16, OUT); px(c, ex + 67, ey - 17, 4, 14, '#FFC93C');
   for (const wx of [ex + 8, ex + 22, ex + 40, ex + 58]) { pell(c, wx, ey - 2, 6, 6, OUT); pell(c, wx, ey - 2, 5, 5, '#E8413A'); px(c, wx - 1, ey - 3, 2, 2, '#FFC93C'); }
   m.lights.push({ x: ex + 12, y: ey - 20, r: 16, col: '#FFE2A0', a: 0.55, fl: 1 }, { x: ex + 70, y: ey - 10, r: 22, col: '#FFF6D8', a: 0.6, fl: 0 });
-  for (let tx = 42; tx <= 46; tx++) { setSolid(m, tx, 22); setSolid(m, tx, 21); }
+  for (let tx = 42 + o; tx <= 46 + o; tx++) { setSolid(m, tx, 22); setSolid(m, tx, 21); }
   // the glowing boarding mat by the cab door
   const mx = STATION.mat.tx * TS, my = STATION.mat.ty * TS;
   px(c, mx + 1, my + 2, 14, 12, OUT); px(c, mx + 2, my + 3, 12, 10, '#5A2E6E');
   for (let i = 0; i < 6; i++) px(c, mx + 3, my + 4 + i, 10, 1, RAINBOW[i]);
   m.lights.push({ x: mx + 8, y: my + 8, r: 24, col: '#FFD23F', a: 0.45, fl: 2 });
-  m.bushes = (m.bushes || []).filter(b => { const bad = b.tx >= 36 && b.ty >= 16 && b.ty <= 24 && b.tx <= 46; if (bad) setSolid(m, b.tx, b.ty, 0); return !bad; });
+  m.bushes = (m.bushes || []).filter(b => { const bad = b.tx >= 36 + o && b.ty >= 16 && b.ty <= 24 && b.tx <= 46 + o; if (bad) setSolid(m, b.tx, b.ty, 0); return !bad; });
   m.entries = m.entries || {};
   m.entries.station = { x: mx + 8, y: my - 14, face: 'down' };
   m.station = { x: mx + 8, y: my + 8 };
@@ -8565,30 +8572,31 @@ function fennelTalk(n) {
 }
 
 // ---------------------------------------------------------------- Rainbow Town: the Great Tree with a hidden ladder, and Fennel's dock on the stream
-const GTREE = { tx: 24, ladderY: 6, bushes: [[23, 6], [25, 6], [24, 7]] };
+const GTREE = { tx: 32, ladderY: 6, bushes: [[31, 6], [33, 6], [32, 7]] };
 let ladderCool = false;
 function sqTown(m) {
   const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(91);
   // clear the space
-  const inZone = (tx, ty) => tx >= 22 && tx <= 26 && ty >= 2 && ty <= 8 || tx >= 28 && tx <= 33 && ty >= 24 && ty <= 26;
+  const G = GTREE.tx, FD = TOWN_BX + 6, SY = TOWN_SY; // the tree's column, Fennel's dock column, the stream's top row
+  const inZone = (tx, ty) => tx >= G - 2 && tx <= G + 2 && ty >= 2 && ty <= 8 || tx >= FD - 2 && tx <= FD + 3 && ty >= SY - 2 && ty <= SY;
   m.bushes = m.bushes.filter(b => { if (inZone(b.tx, b.ty)) { setSolid(m, b.tx, b.ty, 0); return false; } return true; });
-  for (const g of m.gemSpots || []) if (inZone(g.tx, g.ty)) { g.tx = 24; g.ty = 10; }
+  for (const g of m.gemSpots || []) if (inZone(g.tx, g.ty)) { g.tx = G; g.ty = 10; }
   // the trunk, with big roots
-  const X0 = 23 * TS, X1 = 26 * TS, Y0 = 1 * TS, Y1 = 6 * TS;
-  pell(c, 24.5 * TS, Y1, 34, 6, 'rgba(10,6,24,.5)');
+  const X0 = (G - 1) * TS, X1 = (G + 2) * TS, Y0 = 1 * TS, Y1 = 6 * TS;
+  pell(c, (G + 0.5) * TS, Y1, 34, 6, 'rgba(10,6,24,.5)');
   px(c, X0 - 1, Y0, X1 - X0 + 2, Y1 - Y0, OUT); px(c, X0, Y0, X1 - X0, Y1 - Y0, '#5A3A3A'); px(c, X1 - 12, Y0, 12, Y1 - Y0, '#43282E');
   for (let i = 0; i < 9; i++) px(c, X0 + 3 + ((r() * 40) | 0), Y0 + ((r() * 70) | 0), 1, 6 + ((r() * 8) | 0), '#3A2433');
   for (const [dx, w] of [[-12, 12], [-6, 8], [44, 10], [52, 8]]) { px(c, X0 + dx - 1, Y1 - 7, w + 2, 8, OUT); px(c, X0 + dx, Y1 - 6, w, 6, '#5A3A3A'); px(c, X0 + dx, Y1 - 6, w, 1, '#7A5240'); }
   for (let i = 0; i < 10; i++) px(c, X0 + ((r() * 48) | 0), Y0 + 20 + ((r() * 50) | 0), 3, 2, '#3E8C4A');
   // a rope ladder with glowing rungs
-  const lx = 24 * TS + 3;
+  const lx = G * TS + 3;
   px(c, lx, Y0 + 4, 1, Y1 - Y0 + 8, '#C8A26A'); px(c, lx + 9, Y0 + 4, 1, Y1 - Y0 + 8, '#C8A26A');
   for (let y = Y0 + 8; y < Y1 + 10; y += 6) { px(c, lx, y, 10, 2, '#8A5A3A'); px(c, lx + 1, y, 8, 1, '#D9A06A'); }
   m.lights.push({ x: lx + 5, y: Y1 + 2, r: 16, col: '#B9FF6B', a: 0.35, fl: 1 });
   for (let x = lx - 1; x < lx + 12; x++) setSolid(m, Math.floor(x / TS), 5);
-  for (let ty = 2; ty <= 5; ty++) for (let tx = 23; tx <= 25; tx++) setSolid(m, tx, ty);
+  for (let ty = 2; ty <= 5; ty++) for (let tx = G - 1; tx <= G + 1; tx++) setSolid(m, tx, ty);
   // the canopy covers the village way up high (above everybody)
-  const cx0 = 24.5 * TS, cy0 = 1.4 * TS;
+  const cx0 = (G + 0.5) * TS, cy0 = 1.4 * TS;
   pell(f, cx0, cy0, 56, 30, OUT); pell(f, cx0, cy0, 55, 29, '#123E36'); pell(f, cx0 - 6, cy0 - 4, 44, 21, '#1A5A47'); pell(f, cx0 - 12, cy0 - 9, 26, 12, '#2A7A5A');
   for (let i = 0; i < 30; i++) px(f, cx0 - 48 + ((r() * 96) | 0), cy0 - 22 + ((r() * 40) | 0), 2, 1, r() < 0.5 ? '#3BA07C' : '#5BC46A');
   // a tiny round window peeking out of the leaves: somebody lives up there!
@@ -8597,23 +8605,24 @@ function sqTown(m) {
   for (let i = 0; i < 6; i++) m.lights.push({ x: cx0 - 40 + i * 16, y: cy0 + 22 + (i % 2) * 4, r: 8, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.6, fl: 2 });
   // sparkly bushes hide the bottom of the ladder until you find the village
   if (!flags.village_found) for (const [tx, ty] of GTREE.bushes) { m.bushes.push({ tx, ty, alive: true, secret: true, t: 0 }); setSolid(m, tx, ty, 2); }
-  m.entries.village = { x: 24 * TS + 8, y: 7 * TS + 10, face: 'down' };
+  m.entries.village = { x: G * TS + 8, y: 7 * TS + 10, face: 'down' };
   // Fennel's little dock on the stream
-  const dx = 30 * TS, dy = 26 * TS;
+  const dx = FD * TS, dy = SY * TS;
   px(c, dx - 1, dy - 3, 2 * TS + 2, TS + 4, OUT); px(c, dx, dy - 2, 2 * TS, TS + 2, '#8A6A50');
   for (let k = 0; k < 2 * TS; k += 4) px(c, dx + k, dy - 2, 1, TS + 2, '#6B4A3A');
   px(c, dx, dy + TS - 1, 2 * TS, 2, '#4A3028'); px(c, dx + 1, dy + TS, 3, 6, '#4A3028'); px(c, dx + 2 * TS - 4, dy + TS, 3, 6, '#4A3028');
-  for (const tx of [30, 31]) { setSolid(m, tx, 26, 0); }
-  m.water = m.water.filter(([x, y]) => !(y === 26 && (x === 30 || x === 31))); m._wset = null;
+  for (const tx of [FD, FD + 1]) { setSolid(m, tx, SY, 0); }
+  m.water = m.water.filter(([x, y]) => !(y === SY && (x === FD || x === FD + 1))); m._wset = null;
   // a bucket and a sign with a fish on it
-  px(c, 32 * TS + 3, 25 * TS + 4, 9, 9, OUT); px(c, 32 * TS + 4, 25 * TS + 5, 7, 7, '#5FA8E8'); px(c, 32 * TS + 4, 25 * TS + 5, 7, 2, '#BDF4FF');
-  px(c, 28 * TS + 10, 24 * TS + 6, 2, 12, '#6B4A3A'); px(c, 28 * TS + 4, 24 * TS, 14, 8, OUT); px(c, 28 * TS + 5, 24 * TS + 1, 12, 6, '#D9B57A');
-  px(c, 28 * TS + 7, 24 * TS + 3, 6, 2, '#3FA9E0'); px(c, 28 * TS + 13, 24 * TS + 2, 2, 4, '#3FA9E0');
-  m.fennel = { x: 29 * TS + 8, y: 25 * TS + 12 };
+  const bkx = (FD + 2) * TS, bky = (SY - 1) * TS, sgx = (FD - 2) * TS, sgy = (SY - 2) * TS;
+  px(c, bkx + 3, bky + 4, 9, 9, OUT); px(c, bkx + 4, bky + 5, 7, 7, '#5FA8E8'); px(c, bkx + 4, bky + 5, 7, 2, '#BDF4FF');
+  px(c, sgx + 10, sgy + 6, 2, 12, '#6B4A3A'); px(c, sgx + 4, sgy, 14, 8, OUT); px(c, sgx + 5, sgy + 1, 12, 6, '#D9B57A');
+  px(c, sgx + 7, sgy + 3, 6, 2, '#3FA9E0'); px(c, sgx + 13, sgy + 2, 2, 4, '#3FA9E0');
+  m.fennel = { x: (FD - 1) * TS + 8, y: (SY - 1) * TS + 12 };
 }
 { const _bo = buildOverworld; buildOverworld = function (...a) { const m = _bo(...a); try { sqTown(m); } catch (e) { console.error(e); } return m; }; }
 function fennelDraw(n, cx, cy) { // his own line in the water
-  const tx = n.x + 9, ty = n.y - 16, bx = n.x + 6, by = 26 * TS + 10 + Math.sin(clock * 2.5);
+  const tx = n.x + 9, ty = n.y - 16, bx = n.x + 6, by = TOWN_SY * TS + 10 + Math.sin(clock * 2.5);
   ctx.fillStyle = '#C8A26A'; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(n.x + 5 + i * 0.8 - cx), Math.round(n.y - 8 - i * 1.4 - cy), 1, 1);
   ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 1; i < 8; i++) ctx.fillRect(Math.round(tx + (bx - tx) * i / 8 - cx), Math.round(ty + (by - ty) * i / 8 - cy), 1, 1);
   ctx.fillStyle = '#FF4F5A'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by - 1 - cy), 3, 2); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by + 1 - cy), 3, 1);
@@ -8999,7 +9008,7 @@ const SQ_MAPS = { village: buildVillage, falls: buildFalls, cave: buildCave };
   const _em = enterMap;
   enterMap = function (m, entry, ...a) {
     const r = _em(m, entry, ...a);
-    sqNpcs = m === OUTMAP ? [sqNpc({ spr: 'fennel', x: m.fennel ? m.fennel.x : 29 * TS + 8, y: m.fennel ? m.fennel.y : 25 * TS + 12, reach: 18, talk: fennelTalk, draw: fennelDraw,
+    sqNpcs = m === OUTMAP ? [sqNpc({ spr: 'fennel', x: m.fennel ? m.fennel.x : (TOWN_BX + 5) * TS + 8, y: m.fennel ? m.fennel.y : (TOWN_SY - 1) * TS + 12, reach: 18, talk: fennelTalk, draw: fennelDraw,
         mark: () => !hasPole() || (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]
       : m.landId === 'village' ? villageNpcs() : m.landId === 'falls' ? fallsNpcs() : m.landId === 'cave' ? caveNpcs() : [];
     fishing = null; if ($('fishBar')) $('fishBar').hidden = true;
@@ -9035,9 +9044,9 @@ function updateSide(dt) {
   if (m === OUTMAP && m.entries.village) {
     const atLadder = Math.floor(hero.x / TS) === GTREE.tx && hero.y < GTREE.ladderY * TS + 9;
     if (ladderCool && hero.y > GTREE.ladderY * TS + 26) ladderCool = false;
-    if (!flags.village_found && Math.hypot(hero.x - 24.5 * TS, hero.y - 7 * TS) < 60) hint('gtree', 'Leaves are rustling way up in the big tree... is somebody up there?');
+    if (!flags.village_found && Math.hypot(hero.x - (GTREE.tx + 0.5) * TS, hero.y - 7 * TS) < 60) hint('gtree', 'Leaves are rustling way up in the big tree... is somebody up there?');
     if (!ladderCool && atLadder) { ladderCool = true; tone(400, 0.3, 'triangle', 0.07, 900); travel('village', 'town'); return; }
-    if (hasPole() && fishCount() === 0 && fishTotal === 0 && Math.abs(hero.y - 25 * TS) < 24 && Math.abs(hero.x - 30 * TS) < 60) hint('fishhow', 'Stand by the water and tap the fish button!');
+    if (hasPole() && fishCount() === 0 && fishTotal === 0 && Math.abs(hero.y - (TOWN_SY - 1) * TS) < 24 && Math.abs(hero.x - (TOWN_BX + 6) * TS) < 60) hint('fishhow', 'Stand by the water and tap the fish button!');
   }
   if (m.sqHint && !flags.falls_found && Math.hypot(hero.x - m.sqHint.x, hero.y - m.sqHint.y) < 80) hint('fallshint', 'Splash, splash! Is that a waterfall behind those sparkly bushes?');
   // the waterfall: a cave behind it
@@ -9099,7 +9108,7 @@ function sideLights(cx, cy) {
   // somebody peeking out of the Great Tree's leaves
   if (m === OUTMAP && m.entries.village && !flags.village_found && Math.floor(clock / 3) % 3 === 0) {
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    const X = Math.round(24.5 * TS - 20 - cx), Y = Math.round(1.4 * TS + 10 - cy);
+    const X = Math.round((GTREE.tx + 0.5) * TS - 20 - cx), Y = Math.round(1.4 * TS + 10 - cy);
     ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X, Y, 2, 2); ctx.fillRect(X + 5, Y, 2, 2); ctx.fillStyle = '#7CFF6B'; ctx.fillRect(X + 2, Y - 4, 3, 2);
     ctx.globalCompositeOperation = 'lighter';
   }
@@ -10228,10 +10237,10 @@ if (typeof buildVillage === 'function') {
   if (typeof SQ_MAPS !== 'undefined' && SQ_MAPS.village) SQ_MAPS.village = buildVillage;
 }
 // A giant climbing tree on the town lawn, east of the rainbow fountain, so nobody has to find the secret village first
-const CLB_TOWN = { tx: 30, ty: 20, x: 30 * TS + 8, y: 21 * TS };
+const CLB_TOWN = { tx: 41, ty: 20, x: 41 * TS + 8, y: 21 * TS };
 function clbTownTree(m) {
   const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), q = rng(4242), X = CLB_TOWN.x, Y = CLB_TOWN.y;
-  m.bushes = m.bushes.filter(b => { const inside = b.tx >= 28 && b.tx <= 32 && b.ty >= 16 && b.ty <= 22; if (inside) setSolid(m, b.tx, b.ty, 0); return !inside; });
+  m.bushes = m.bushes.filter(b => { const inside = b.tx >= CLB_TOWN.tx - 2 && b.tx <= CLB_TOWN.tx + 2 && b.ty >= 16 && b.ty <= 22; if (inside) setSolid(m, b.tx, b.ty, 0); return !inside; });
   // roots and a wide trunk going up out of sight
   pell(c, X, Y + 1, 30, 6, 'rgba(10,6,24,.5)');
   const x0 = X - 22, w = 44, top = Y - 76;
@@ -10256,7 +10265,7 @@ function clbTownTree(m) {
   scCanopy(f, q, X, top - 6, 2.6, pal); scCanopy(f, q, X - 26, top + 10, 1.4, pal); scCanopy(f, q, X + 28, top + 8, 1.4, pal);
   for (let i = 0; i < 8; i++) m.lights.push({ x: X - 40 + q() * 80, y: top - 20 + q() * 40, r: 6, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.6, fl: 2 });
   m.lights.push({ x: X, y: Y - 10, r: 26, col: '#B9FF6B', a: 0.7, fl: 2 });
-  for (let tx = 29; tx <= 31; tx++) for (let ty = 16; ty <= 20; ty++) setSolid(m, tx, ty);
+  for (let tx = CLB_TOWN.tx - 1; tx <= CLB_TOWN.tx + 1; tx++) for (let ty = 16; ty <= 20; ty++) setSolid(m, tx, ty);
   m.clbTown = true;
 }
 function ctx_star(c, x, y) { px(c, x - 1, y - 3, 3, 7, '#FFD23F'); px(c, x - 3, y - 1, 7, 3, '#FFD23F'); px(c, x, y, 1, 1, '#FFFFFF'); }
@@ -10802,7 +10811,7 @@ function hmSetupAnimals(m) {
   const add = (a) => { hmAnimals.push(a); return a; };
   const flock = (x, y, n, brown) => { for (let i = 0; i < n; i++) add(hmAnimal(i === 0 && brown ? 'brown' : i % 3 === 2 ? 'brown' : 'hen', x + rand(-20, 20), y + rand(-10, 10), { range: 44 })); };
   const ducks = (x, y, n) => { const mom = add(hmAnimal('duck', x, y, { range: 56 })); let lead = mom; for (let i = 0; i < n; i++) { lead = add(hmAnimal('ling', x - (i + 1) * 9, y, { follow: lead })); } };
-  if (m === OUTMAP) { flock(5 * TS, 20 * TS, 4, true); flock(43 * TS, 15 * TS, 2); ducks(10 * TS, 26 * TS + 12, 3); ducks(38 * TS, 27 * TS + 2, 2); }
+  if (m === OUTMAP) { flock(6 * TS, 20 * TS, 4, true); flock(59 * TS, 15 * TS, 2); ducks(12 * TS, TOWN_SY * TS + 12, 3); ducks(50 * TS, (TOWN_SY + 1) * TS + 2, 2); }
   else if (m.landId === 'meadow') { flock(15 * TS, 24 * TS, 3, true); flock(27 * TS, 20 * TS, 2); ducks(6 * TS, 5 * TS + 8, 3); }
   else if (m.landId === 'cove') { const w = (m.water || []).find(([x, y]) => y > 6); if (w) ducks(w[0] * TS + 8, w[1] * TS + 8, 2); }
   else if (m.landId === 'hollow') flock(20 * TS, 18 * TS, 2);
@@ -10904,24 +10913,25 @@ function hmAnimalDrawables(list) {
   if (typeof SQS !== 'undefined') SQS.ollie = [otter(0), otter(1)];
   HMA.ollie = [otter(0), otter(1)];
 })();
-const HM_OLLIE = { x: 11 * TS + 8, y: 25 * TS + 6 };
+const HM_OLLIE = { x: 13 * TS + 8, y: (TOWN_SY - 1) * TS + 6 };
 function hmCamp(m) { // Ollie's camp by the stream: a little tent, a map board and his supplies
   const c = m.bg.getContext('2d'), f = m.fg.getContext('2d');
-  m.bushes = m.bushes.filter(b => { const inside = b.tx >= 5 && b.tx <= 12 && b.ty >= 22 && b.ty <= 25; if (inside) setSolid(m, b.tx, b.ty, 0); return !inside; });
-  const tx = 6 * TS, ty = 24 * TS + 14;
+  const CX = 8, CY = TOWN_SY - 2; // the tent's tile, two rows up from the stream
+  m.bushes = m.bushes.filter(b => { const inside = b.tx >= CX - 1 && b.tx <= CX + 6 && b.ty >= CY - 2 && b.ty <= CY + 1; if (inside) setSolid(m, b.tx, b.ty, 0); return !inside; });
+  const tx = CX * TS, ty = CY * TS + 14;
   pell(c, tx + 14, ty, 18, 4, 'rgba(10,6,24,.45)');
   for (let k = 0; k < 18; k++) { const w = Math.round(k * 1.5); px(f, tx + 14 - w - 1, ty - 22 + k, w * 2 + 2, 1, OUT); px(f, tx + 14 - w, ty - 22 + k, w, 1, '#E0A82E'); px(f, tx + 14, ty - 22 + k, w, 1, '#B8861E'); }
   for (let k = 0; k < 5; k++) { const w = 27 + k; px(f, tx + 14 - w / 2 | 0, ty - 4 + k, w, 1, k === 4 ? OUT : '#B8861E'); }
   for (let k = 0; k < 12; k++) { const w = Math.round(k * 0.6); px(c, tx + 14 - w, ty - 12 + k, w * 2 + 1, 1, '#2A1A20'); }
   px(f, tx + 13, ty - 26, 2, 6, '#6A4028'); px(f, tx + 15, ty - 26, 6, 4, '#3DF2FF'); px(f, tx + 15, ty - 26, 6, 1, '#BDF4FF');
-  setSolid(m, 6, 24); setSolid(m, 7, 24);
+  setSolid(m, CX, CY); setSolid(m, CX + 1, CY);
   // the map board on an easel
-  const bx = 9 * TS + 2, by = 24 * TS + 2;
+  const bx = (CX + 3) * TS + 2, by = CY * TS + 2;
   px(c, bx + 2, by + 4, 2, 12, '#5E3A24'); px(c, bx + 14, by + 4, 2, 12, '#5E3A24');
   px(f, bx - 1, by - 12, 20, 16, OUT); px(f, bx, by - 11, 18, 14, '#F3E2B8'); px(f, bx, by - 11, 18, 1, '#FFF6DC');
   px(f, bx + 2, by - 9, 6, 4, '#7CCF6A'); px(f, bx + 9, by - 8, 6, 5, '#5FA8E8'); px(f, bx + 3, by - 4, 5, 4, '#C8B0E8'); px(f, bx + 10, by - 3, 4, 3, '#E8905A');
   px(f, bx + 6, by - 6, 6, 1, '#8A5A3A'); px(f, bx + 7, by - 5, 1, 4, '#8A5A3A'); px(f, bx + 12, by - 10, 3, 3, '#E85A5A');
-  setSolid(m, 9, 24);
+  setSolid(m, CX + 3, CY);
   m.lights.push({ x: tx + 14, y: ty - 8, r: 26, col: '#FFC870', a: 0.4, fl: 1 });
   m.hmCamp = true;
 }
@@ -11128,7 +11138,7 @@ if (typeof TROPHIES !== 'undefined') TROPHIES.push(
     try { hmHouses(m, homeIdx); } catch (e) { console.warn(e); }
     try { hmCamp(m); } catch (e) { console.warn(e); }
     try {
-      for (const [tx, ty, kind] of [[2, 14, 'crate'], [3, 14, 'barrel'], [37, 20, 'barrel'], [38, 20, 'crate'], [46, 14, 'pot'], [4, 25, 'crate'], [5, 25, 'pot'], [3, 29, 'crate'], [4, 29, 'pot'], [45, 25, 'barrel']])
+      for (const [tx, ty, kind] of [[2, 14, 'crate'], [3, 14, 'barrel'], [51, 23, 'barrel'], [51, 24, 'crate'], [62, 14, 'pot'], [4, TOWN_SY - 1, 'crate'], [5, TOWN_SY - 1, 'pot'], [3, TOWN_SY + 3, 'crate'], [4, TOWN_SY + 3, 'pot'], [61, TOWN_SY - 1, 'barrel']])
         if (!solidAt(m, tx, ty) && !(m.stone && m.stone.has(tx + ',' + ty))) hmAddCrate(m, tx, ty, kind);
       if (m.hmCrates && m.hmCrates.length) m.hmCrates[0].gold = true;
     } catch (e) { console.warn(e); }
