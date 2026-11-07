@@ -390,7 +390,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
-  <p class="tver">version 20</p>
+  <p class="tver">version 20.1</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -8695,7 +8695,7 @@ function soupReady() {
   const kinds = Object.keys(FISH).filter(id => fishBag[id] > 0 && !FISH[id].junk);
   return mode === 'tricky' ? kinds.length >= 3 : kinds.reduce((a, id) => a + fishBag[id], 0) >= 3;
 }
-function lightLantern(L) {
+function sqLightLantern(L) {
   if (lantLit(L.i)) return;
   if (mode === 'tricky' && L.i !== lantNext) {
     sfx.bad();
@@ -8977,7 +8977,7 @@ function updateSide(dt) {
     if (!caveCool && (ttx === 14 || ttx === 15) && hero.y < 5 * TS + 12) { caveCool = true; travel('cave', 'falls'); return; }
   }
   // the village: lanterns, the moon bell, the treasure chest
-  if (m.lanterns) for (const L of m.lanterns) if (!lantLit(L.i) && sqTalkD(L.x, L.y) < 18) { if (!L.cool) { L.cool = true; lightLantern(L); if (state !== 'play') return; } } else if (sqTalkD(L.x, L.y) > 28) L.cool = false;
+  if (m.lanterns) for (const L of m.lanterns) if (!lantLit(L.i) && sqTalkD(L.x, L.y) < 18) { if (!L.cool) { L.cool = true; sqLightLantern(L); if (state !== 'play') return; } } else if (sqTalkD(L.x, L.y) > 28) L.cool = false;
   if (m.bell && sqTalkD(m.bell.x, m.bell.y + 8) < 16 && m.bell.ring <= 0) {
     m.bell.ring = 1.6; [523, 784, 1047].forEach((fq, i) => tone(fq, 0.9, 'sine', 0.09, null, i * 0.02));
     for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, s = rand(20, 60); poofs.push({ x: m.bell.x, y: m.bell.y - 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, life: 1, col: RAINBOW[i % 6] }); }
