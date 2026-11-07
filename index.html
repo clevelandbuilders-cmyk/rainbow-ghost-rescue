@@ -375,6 +375,10 @@
   @keyframes tglow { 0%, 100% { filter: none; } 50% { filter: brightness(1.25); } }
   @keyframes tblink { 50% { opacity: .35; } }
   @media (max-aspect-ratio: 1/1) { .tking { top: 10vh; } }
+  /* action buttons: smaller so they don't cover the game (scales size and spacing together) */
+  #atkBtn, #powBtn, #swapBtn, #dashBtn, #fishBtn { zoom: .78; }
+  @media (max-width: 900px), (max-height: 640px) { #atkBtn, #powBtn, #swapBtn, #dashBtn, #fishBtn { zoom: .66; } }
+  @media (max-height: 420px) { #atkBtn, #powBtn, #swapBtn, #dashBtn, #fishBtn { zoom: .56; } }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .05s !important; }
   }
