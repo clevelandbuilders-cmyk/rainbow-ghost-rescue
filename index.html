@@ -154,14 +154,14 @@
   #pick h1 { margin: 0; font: 700 clamp(34px, 7.6vmin, 76px)/1 var(--pixel); text-align: center; text-wrap: balance; letter-spacing: .02em; }
   #pick h1 span { display: inline-block; }
   .who { font: 600 clamp(18px, 3.4vmin, 28px)/1 var(--pixel); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
-  .heroes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(12px, 2vmin, 24px); width: min(1100px, 100%); }
-  @media (max-aspect-ratio: 1/1) { .heroes { grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(560px, 100%); } }
+  .heroes { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: clamp(10px, 1.8vmin, 22px); width: min(1240px, 100%); }
+  @media (max-aspect-ratio: 1/1) { .heroes { grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(720px, 100%); } }
   .hero-card { border: 0; cursor: pointer; padding: 14px 8px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: transform .12s; }
   .hero-card:active { transform: translateY(3px); }
   .hero-card .pic { width: 100%; aspect-ratio: 1 / 1.05; max-height: 28vh; display: grid; place-items: center;
     background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--edge) 45%, transparent), transparent 70%); }
   .hero-card img { height: 88%; image-rendering: pixelated; animation: bob 1.6s steps(4) infinite; filter: drop-shadow(0 0 8px var(--edge)); }
-  .hero-card:nth-child(2) img { animation-delay: -.4s; } .hero-card:nth-child(3) img { animation-delay: -.8s; } .hero-card:nth-child(4) img { animation-delay: -1.2s; } .hero-card:nth-child(5) img { animation-delay: -.2s; } .hero-card:nth-child(6) img { animation-delay: -.6s; }
+  .hero-card:nth-child(2) img { animation-delay: -.4s; } .hero-card:nth-child(3) img { animation-delay: -.8s; } .hero-card:nth-child(4) img { animation-delay: -1.2s; } .hero-card:nth-child(5) img { animation-delay: -.2s; } .hero-card:nth-child(6) img { animation-delay: -.6s; } .hero-card:nth-child(7) img { animation-delay: -1s; }
   .hero-card .name { font: 700 clamp(22px, 4vmin, 34px)/1 var(--pixel); color: var(--edge); text-shadow: 0 0 10px var(--edge); }
   .modes { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .mode { border: 0; cursor: pointer; padding: 10px 20px; font: 700 clamp(18px, 3.2vmin, 26px)/1 var(--pixel); display: flex; align-items: center; gap: 10px; color: var(--muted); }
@@ -3649,7 +3649,7 @@ function nextStory() {
   if (story.i === 2) { story.beaconOff = true; shake = 0.6; for (let k = 0; k < 6; k++) { const a = -Math.PI / 2 + (k - 2.5) * 0.45; story.shards.push({ x: bx, y: by - 30, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140 - 40, col: RAINBOW[k] }); } poof(bx, by - 30, '#FFFFFF'); [880, 660, 440, 220].forEach((f, k) => tone(f, 0.25, 'square', 0.07, f / 2, k * 0.08)); }
   if (story.i === 3) { GHOSTS.forEach((g, k) => { const a = k / GHOSTS.length * Math.PI * 2; story.ghosts.push({ def: g, a, x: bx + Math.cos(a) * 220, y: by - 40 + Math.sin(a) * 140 }); }); sfx.giggle(); }
   if (story.i === 4) { const types = ['gloom', 'boing', 'puff', 'shell', 'gloom', 'gloom', 'boing', 'puff']; types.forEach((t, k) => story.crits.push({ type: t, land: ['town', 'meadow', 'woods', 'frost'][k % 4], x: bx + (k - 3.5) * 34 + rand(-6, 6), y: by + 30 + (k % 2) * 22, t: -k * 0.18, ph: rand(0, 6) })); }
-  if (story.i === 5) { HEROES.forEach((h, k) => story.heroes.push({ def: h, x: bx + (k - 2.5) * 30, y: by + 160, ty: by + 58 + (k % 2) * 6 })); sfx.win(); }
+  if (story.i === 5) { HEROES.forEach((h, k) => story.heroes.push({ def: h, x: bx + (k - (HEROES.length - 1) / 2) * 30, y: by + 160, ty: by + 58 + (k % 2) * 6 })); sfx.win(); }
 }
 function laugh() { [392, 330, 294, 262].forEach((f, k) => tone(f, 0.16, 'square', 0.06, f * 0.8, k * 0.17)); }
 function thunder() { story.flash = 1; shake = 0.4; tone(55, 0.9, 'sawtooth', 0.09, 30); tone(90, 0.5, 'square', 0.05, 40, 0.05); }
@@ -4698,7 +4698,7 @@ function nextEnding() {
     cam.x = bx - VW / 2; cam.y = by - 20 - VH / 2;
   }
   if (ending.i === 4) RAINBOW.forEach((col, k) => { const a = k / 6 * Math.PI * 2 - Math.PI / 2; ending.shards.push({ col, x: bx + Math.cos(a) * 260, y: by - 40 + Math.sin(a) * 180, delay: k * 0.3, done: false }); });
-  if (ending.i === 5) { HEROES.forEach((h, k) => ending.heroes.push({ def: h, x: bx + (k - 2.5) * 30, y: by + 170, ty: by + 24 + (k % 2) * 6 })); sfx.win(); }
+  if (ending.i === 5) { HEROES.forEach((h, k) => ending.heroes.push({ def: h, x: bx + (k - (HEROES.length - 1) / 2) * 30, y: by + 170, ty: by + 24 + (k % 2) * 6 })); sfx.win(); }
 }
 function epart(x, y, col, n = 10, sp = 60) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = rand(sp * 0.3, sp); ending.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, life: 1, col }); } }
 function rumble() { tone(45, 1.2, 'sawtooth', 0.08, 28); tone(70, 0.8, 'square', 0.04, 35, 0.2); }
@@ -5319,6 +5319,292 @@ function leaveFlight() {
   }, 260);
 }
 $('flyExit').addEventListener('click', () => { sfx.tap(); $('celebrate').hidden = true; leaveFlight(); });
+
+// ================================================================ Parker the lightning wizard and Declan the brawler
+// Parker: a cape and a Lightning Wand. The bolt starts as a tiny spark and grows longer, thicker and
+// forkier as the wand gets stronger (5 stars, then each rune you put in it at the workbench).
+// Declan: Power Fists. Punch, punch, BIG FIST, then kick, kick, BIG FOOT. The magic grows the same way.
+
+HEROES.push({ id: 'declan', name: 'Declan', glow: '#7CFF4F', skin: '#FFD3B0', body: 'shirt', outfit: '#2FA84F', outfitD: '#1D7535', trim: '#FFD23F',
+  pants: '#2D3A8C', pantsD: '#1C2560', sleeve: '#FFD3B0', hand: '#FFD3B0', legs: '#FFD3B0', shoes: '#F2F4FF', roof: '#4FA83D', roofD: '#2E6B22', wall: '#E2F0D0' });
+Object.assign(HEROES.find(h => h.id === 'parker'), { glow: '#FFD23F', cape: true });
+
+HAIR.declan = function (p, dir) {
+  const H = '#4A2A16', L = '#6B3E22', R = '#E8413A', RD = '#A8231E';
+  if (dir === 'down') {
+    p.ell(11, 6.6, 6.2, 3.2, H);
+    [6, 9, 12, 15].forEach((x, i) => { p.rect(x, 2 + (i % 2), 2, 3, H); p.set(x, 2 + (i % 2), L); });
+    p.rect(5, 8, 1, 3, H); p.rect(16, 8, 1, 3, H);
+    p.rect(5, 7, 12, 2, R); p.rect(5, 8, 12, 1, RD);
+  } else if (dir === 'up') {
+    p.ell(11, 9, 6, 6.2, H);
+    [6, 9, 12, 15].forEach((x, i) => p.rect(x, 2 + (i % 2), 2, 3, H));
+    [[8, 11], [13, 12], [10, 14]].forEach(([x, y]) => p.set(x, y, L));
+    p.rect(5, 7, 12, 2, R); p.rect(10, 9, 2, 2, RD); p.rect(9, 11, 1, 4, R); p.rect(12, 11, 1, 3, R);
+  } else {
+    p.ell(10.5, 6.6, 6, 3.2, H); p.rect(5, 7, 4, 5, H);
+    [5, 8, 11, 14].forEach((x, i) => { p.rect(x, 2 + (i % 2), 2, 3, H); p.set(x + 1, 2 + (i % 2), L); });
+    p.rect(5, 7, 12, 2, R); p.rect(5, 8, 12, 1, RD);
+    p.rect(2, 8, 3, 1, R); p.rect(1, 9, 3, 1, R); p.set(0, 10, R);
+  }
+};
+
+// extra layers around the normal hero drawing: Parker's cape and wand, Declan's gloves
+const _drawHero = drawHero;
+drawHero = function (def, dir, f) {
+  const base = _drawHero(def, dir, f);
+  if (def.id !== 'parker' && def.id !== 'declan') return base;
+  const back = new PB(22, 30), front = new PB(22, 30), deco = new PB(22, 30);
+  const s1 = f === 1 ? 1 : 0, s2 = f === 3 ? 1 : 0, swing = f === 1 ? -1 : f === 3 ? 1 : 0, flap = f % 2;
+  if (def.id === 'parker') {
+    const C = '#3A3FD9', CD = '#262A99', T = '#FFD93D', stick = '#4A2E7A', tip = '#FFE45C';
+    const capeRow = (y, x0, x1) => { for (let x = x0; x <= x1; x++) (dir === 'up' ? front : back).set(x, y, x >= x1 - 1 ? CD : C); };
+    if (dir === 'down') {
+      for (let y = 14; y <= 26; y++) { const hw = 6 + Math.floor((y - 14) * 0.25); capeRow(y, 11 - hw, 10 + hw); }
+      for (let x = 4; x <= 17; x += 2) back.set(x + flap, 26, T);
+      deco.set(10, 15, T); deco.set(11, 15, T);
+      const wy = 12 + s1; front.rect(2, wy + 1, 1, 8, stick); front.ell(2.5, wy, 1.7, 1.7, tip); front.set(2, wy - 1, '#FFFFFF');
+    } else if (dir === 'up') {
+      for (let y = 16; y <= 26; y++) { const hw = 5 + Math.floor((y - 16) * 0.3); capeRow(y, 11 - hw, 10 + hw); }
+      for (let x = 6; x <= 15; x += 2) front.set(x + flap, 26, T);
+      // a lightning bolt on the back of the cape
+      [[12, 17], [11, 18], [10, 19], [11, 19], [12, 19], [11, 20], [10, 21]].forEach(([x, y]) => front.set(x, y, T));
+      const wy = 12 + s2; front.rect(19, wy + 1, 1, 8, stick); front.ell(19.5, wy, 1.7, 1.7, tip);
+    } else {
+      for (let y = 14; y <= 26; y++) { const x0 = 5 - Math.floor((y - 14) * (0.25 + flap * 0.08)); capeRow(y, Math.max(0, x0), 10); }
+      for (let y = 18; y <= 26; y += 3) back.set(Math.max(0, 5 - Math.floor((y - 14) * 0.3)), y, T);
+      const wy = 12 + (swing > 0 ? 1 : 0); front.rect(16, wy + 1, 1, 7, stick); front.ell(16.5, wy, 1.7, 1.7, tip); front.set(16, wy - 1, '#FFFFFF');
+    }
+  } else {
+    const G = '#E8413A', GL = '#FF8A7A', GD = '#A8231E', W = '#FFFFFF';
+    const glove = (x, y) => { front.rect(x, y, 4, 3, G); front.set(x, y, GL); front.rect(x, y + 2, 4, 1, GD); front.rect(x, y - 1, 4, 1, W); };
+    if (dir === 'side') glove(9 + swing, 19);
+    else { glove(3, 19 + s1); glove(15, 19 + s2); }
+    if (dir === 'down') { deco.rect(10, 16, 2, 2, '#FFD23F'); deco.set(9, 16, '#FFD23F'); deco.set(12, 16, '#FFD23F'); deco.set(10, 15, '#FFF1A8'); }
+    // a bit of sparkle on his sneakers
+    if (dir !== 'up') { deco.set(dir === 'side' ? 12 : 8, 26, '#7CFF4F'); if (dir === 'down') deco.set(14, 26, '#7CFF4F'); }
+  }
+  back.outline(); front.outline();
+  const out = back;
+  for (let i = 0; i < base.d.length; i++) if (base.d[i]) out.d[i] = base.d[i];
+  for (let i = 0; i < front.d.length; i++) if (front.d[i]) out.d[i] = front.d[i];
+  for (let i = 0; i < deco.d.length; i++) if (deco.d[i]) out.d[i] = deco.d[i];
+  return out;
+};
+if (typeof FLY_LOOK !== 'undefined') FLY_LOOK.declan = ['hair', '#4A2A16'];
+
+// ---------------------------------------------------------------- the two new weapons
+Object.assign(WEAPONS, {
+  parker: { name: 'Lightning Wand', icon: 'bolt', color: '#FFE45C', ranged: true, bolt: true, speed: 460, life: 0.11, dmg: 1, cd: 0.32 },
+  declan: { name: 'Power Fists', icon: 'fist', color: '#7CFF4F', reach: 20, arc: 1.4, dmg: 1, cd: 0.2, brawl: true },
+});
+WICONS.bolt = '<path d="M14 1L4 13h6l-3 10 11-13h-6l3-9z" fill="currentColor"/>';
+WICONS.fist = '<path fill-rule="evenodd" d="M5 5h12v2h2v8h-2v2h-2v4H8v-4H6v-2H4V7h1zM8 8v3h2V8zm4 0v3h2V8z" fill="currentColor"/>';
+
+// how strong the wand or fists are: 0 = brand new, +1 at 5 stars, +1 for each rune (up to 4)
+function fightLevel(w) { return Math.min(4, (powered() ? 1 : 0) + (w.runes ? w.runes.length : 0)); }
+function aimHero(w) {
+  let best = null, bd = (w.reach || 60) + 34;
+  if (cur.field) {
+    const cand = enemies.map(e => ({ x: e.x, y: e.y }));
+    if (boss && boss.active && !boss.dying) cand.push({ x: boss.x, y: boss.y - 20, far: 1 });
+    if (w.ranged) for (const t of [...(cur.runes || []), ...(cur.switches || [])]) if (!flags[t.flag]) cand.push({ x: t.tx * TS + 8, y: t.ty * TS + 14, far: 1 });
+    if (w.ranged) for (const b of cur.bushes || []) if (b.alive && b.secret) cand.push({ x: b.tx * TS + 8, y: b.ty * TS + 6 });
+    for (const e of cand) { const d = Math.hypot(e.x - hero.x, e.y - hero.y); if (d < bd + (e.far ? 60 : 0)) { bd = d; best = e; } }
+  }
+  if (best) { const d = Math.hypot(best.x - hero.x, best.y - hero.y) || 1; hero.dx = (best.x - hero.x) / d; hero.dy = (best.y - hero.y) / d; faceFrom(hero.dx, hero.dy); }
+  return Math.atan2(hero.dy, hero.dx);
+}
+
+const _doAttack = doAttack;
+doAttack = function () {
+  if (state !== 'play' || !heroDef || hero.atkCd > 0) return;
+  const w = curW();
+  if (!w.bolt && !w.brawl) return _doAttack();
+  const ang = aimHero(w), lv = fightLevel(w);
+  if (w.bolt) zapBolt(w, ang, lv); else throwPunch(w, ang, lv);
+};
+
+// ---------------------------------------------------------------- Parker's lightning
+let bolts = [];
+const BOLT_THICK = [1, 1, 2, 3, 3];
+function zapBolt(w, ang, lv) {
+  hero.atk = { t: 0, dur: 0.18, ang, hit: true };
+  hero.atkCd = w.cd;
+  const range = 46 + lv * 20, sx = hero.x + Math.cos(ang) * 9, sy = hero.y - 12 + Math.sin(ang) * 9;
+  const s = { x: sx, y: sy, vx: Math.cos(ang) * w.speed, vy: Math.sin(ang) * w.speed, life: range / w.speed, dmg: w.dmg + Math.floor(lv / 2), col: w.tint || w.color,
+    t: 0, hit: new Set(), w, bolt: true };
+  shots.push(s);
+  bolts.push({ s, ox: sx, oy: sy, lv, col: s.col, t: 0, done: -1, seed: Math.random() * 1000 | 0, forks: [] });
+  tone(1900 - lv * 250, 0.09 + lv * 0.03, 'sawtooth', 0.035 + lv * 0.006, 300);
+  if (lv >= 2) tone(90, 0.12, 'square', 0.04, 50, 0.02);
+}
+function boltImpact(b) {
+  const x = b.s.x, y = b.s.y;
+  for (let i = 0; i < 4 + b.lv * 3; i++) { const a = Math.random() * Math.PI * 2, sp = rand(20, 50 + b.lv * 20); poofs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.35, col: i % 2 ? '#FFFFFF' : b.col }); }
+  if (!cur.field) return;
+  // strong lightning jumps to more critters
+  if (b.lv >= 3) {
+    const near = enemies.filter(o => !o.dead && o.hurt <= 0 && Math.hypot(o.x - x, o.y - 6 - y) < 70).sort((p, q) => Math.hypot(p.x - x, p.y - y) - Math.hypot(q.x - x, q.y - y)).slice(0, b.lv - 2);
+    near.forEach(o => { b.forks.push({ x: o.x, y: o.y - 8 }); hurtEnemy(o, 1, x, y); runeHit(o, 1); });
+    if (near.length) tone(1400, 0.08, 'sawtooth', 0.04, 600, 0.04);
+  }
+  // the biggest wand makes a thunder blast where it lands
+  if (b.lv >= 4) {
+    fx.push({ kind: 'ring', x, y: y + 6, t: 0, dur: 0.35, r: 30, col: '#FFE45C' });
+    shake = Math.max(shake, 0.16); tone(110, 0.22, 'square', 0.07, 45);
+    for (const e of enemies) if (!e.dead && e.hurt <= 0 && Math.hypot(e.x - x, e.y - 6 - y) < 30) hurtEnemy(e, 1, x, y);
+    for (const bu of cur.bushes || []) if (bu.alive && Math.hypot(bu.tx * TS + 8 - x, bu.ty * TS + 8 - y) < 24) breakBush(bu);
+  }
+}
+function updateBolts(dt) {
+  for (const b of bolts) {
+    b.t += dt;
+    if (b.done < 0 && b.s.life <= 0) { b.done = b.t; if (b.s.life === 0) boltImpact(b); }
+    else if (b.done < 0 && (!cur.field || !shots.includes(b.s))) b.done = b.t;
+  }
+  bolts = bolts.filter(b => b.done < 0 || b.t - b.done < 0.22);
+}
+function zigzag(x0, y0, x1, y1, seed, jag) {
+  const r = rng(seed), len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.round(len / 7));
+  const nx = -(y1 - y0) / (len || 1), ny = (x1 - x0) / (len || 1), pts = [[x0, y0]];
+  for (let i = 1; i < n; i++) { const k = i / n, o = (r() - 0.5) * jag; pts.push([x0 + (x1 - x0) * k + nx * o, y0 + (y1 - y0) * k + ny * o]); }
+  pts.push([x1, y1]);
+  return pts;
+}
+function strokePix(pts, th, col) {
+  ctx.fillStyle = col;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+    for (let s = 0; s <= n; s++) ctx.fillRect(Math.round(ax + (bx - ax) * s / n - th / 2), Math.round(ay + (by - ay) * s / n - th / 2), th, th);
+  }
+}
+function drawBolts(cx, cy) {
+  for (const b of bolts) {
+    const fade = b.done < 0 ? 1 : 1 - (b.t - b.done) / 0.22, th = BOLT_THICK[b.lv];
+    const flick = b.seed + Math.floor(b.t * 30) * 7, x0 = b.ox - cx, y0 = b.oy - cy, x1 = b.s.x - cx, y1 = b.s.y - cy;
+    const pts = zigzag(x0, y0, x1, y1, flick, 5 + b.lv * 2);
+    ctx.globalAlpha = 0.55 * fade; strokePix(pts, th + 2, b.col);
+    ctx.globalAlpha = fade; strokePix(pts, th, '#FFFFFF');
+    // forks: little branches from the stronger bolts
+    if (b.lv >= 1) {
+      const r = rng(flick + 3);
+      for (let k = 0; k < b.lv; k++) {
+        const [px, py] = pts[1 + Math.floor(r() * Math.max(1, pts.length - 2))], a = Math.atan2(y1 - y0, x1 - x0) + (r() < 0.5 ? -1 : 1) * (0.5 + r() * 0.6), l = 6 + r() * (4 + b.lv * 3);
+        ctx.globalAlpha = 0.8 * fade; strokePix(zigzag(px, py, px + Math.cos(a) * l, py + Math.sin(a) * l, flick + k, 3), 1, b.col);
+      }
+    }
+    for (const f of b.forks) { const fp = zigzag(x1, y1, f.x - cx, f.y - cy, flick + 11, 8); ctx.globalAlpha = 0.6 * fade; strokePix(fp, 3, b.col); ctx.globalAlpha = fade; strokePix(fp, 1, '#FFFFFF'); }
+    // the spark at the tip
+    ctx.globalAlpha = fade; ctx.fillStyle = '#FFFFFF';
+    const sz = 1 + b.lv; ctx.fillRect(Math.round(x1 - sz), Math.round(y1), sz * 2 + 1, 1); ctx.fillRect(Math.round(x1), Math.round(y1 - sz), 1, sz * 2 + 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------- Declan's punches and kicks
+const FIST_SPR = {};
+(function () {
+  const glove = () => {
+    const p = new PB(7, 7);
+    p.ell(3.5, 3.5, 3.4, 3.2, '#E8413A'); p.rect(1, 1, 2, 1, '#FF8A7A'); p.set(1, 2, '#FF8A7A');
+    p.rect(4, 4, 2, 1, '#A8231E'); p.rect(0, 2, 1, 3, '#FFFFFF');
+    return p.outline().canvas();
+  };
+  const foot = () => {
+    const p = new PB(9, 6);
+    p.rect(0, 0, 3, 3, '#FFD3B0'); p.ell(5, 3, 3.6, 2.2, '#F2F4FF'); p.rect(1, 3, 7, 1, '#F2F4FF');
+    p.rect(4, 2, 3, 1, '#7CFF4F'); p.rect(1, 4, 8, 1, '#9AA3C0');
+    return p.outline().canvas();
+  };
+  const g = glove(), f = foot();
+  const flipC = (c) => { const n = mk(c.width, c.height), x = n.getContext('2d'); x.translate(c.width, 0); x.scale(-1, 1); x.drawImage(c, 0, 0); return n; };
+  FIST_SPR.fist = [g, flipC(g)]; FIST_SPR.foot = [f, flipC(f)];
+})();
+function throwPunch(w, ang, lv) {
+  const C = hero.combo || (hero.combo = { step: 0, kind: 'punch', last: -9 });
+  if (clock - C.last > 0.9) C.step = 0;
+  const big = C.step === 2, kind = C.kind;
+  hero.atk = { t: 0, dur: big ? 0.3 : 0.16, ang, hit: false, brawl: true, big, kind, side: C.step % 2 ? 1 : -1, lv };
+  hero.atkCd = big ? w.cd * 2.2 : w.cd;
+  C.last = clock; C.step++;
+  if (big) { C.step = 0; C.kind = kind === 'punch' ? 'kick' : 'punch'; }
+  if (big) {
+    // a little hop forward for the big one
+    const lx = Math.cos(ang) * 6, ly = Math.sin(ang) * 6;
+    if (!hits(cur, hero.x + lx, hero.y)) hero.x += lx;
+    if (!hits(cur, hero.x, hero.y + ly)) hero.y += ly;
+    tone(150, 0.2, 'sawtooth', 0.07, 60); tone(660 + lv * 120, 0.14, 'triangle', 0.05, 1320, 0.05);
+  } else tone(kind === 'punch' ? 260 : 200, 0.07, 'square', 0.05, kind === 'punch' ? 140 : 100);
+}
+function brawlHits(w, a) {
+  const big = a.big, lv = a.lv;
+  const reach = w.reach * (big ? 1.6 : 1), arc = (big ? 1.25 : 0.85), dmg = w.dmg + (big ? 2 : 0) + Math.floor(lv / 2);
+  const ox = hero.x, oy = hero.y - (a.kind === 'kick' ? 4 : 9), a0 = a.ang;
+  const inArc = (x, y, extra = 0) => {
+    const d = Math.hypot(x - ox, y - oy); if (d > reach + extra) return false;
+    let da = Math.atan2(y - oy, x - ox) - a0; da = Math.atan2(Math.sin(da), Math.cos(da));
+    return Math.abs(da) < arc || d < 8;
+  };
+  if (!cur.field) return;
+  const col = w.tint || w.color, hx = ox + Math.cos(a0) * reach * 0.8, hy = oy + Math.sin(a0) * reach * 0.8;
+  if (big) shake = Math.max(shake, 0.2);
+  let any = false;
+  for (const e of enemies) if (inArc(e.x, e.y - 6, e.r - 1)) {
+    const was = e.hurt; hurtEnemy(e, dmg, ox, oy); if (!was) runeHit(e); any = true;
+    if (big) { e.kx *= 1.7; e.ky *= 1.7; }
+    if (lv >= 1) for (let i = 0; i < 3 + lv * 2; i++) poofs.push({ x: e.x + rand(-4, 4), y: e.y - 8, vx: rand(-50, 50), vy: rand(-80, -20), life: 0.5, col: lv >= 3 ? pick(RAINBOW) : i % 2 ? '#FFFFFF' : col });
+  }
+  for (const b of cur.bushes) if (b.alive && inArc(b.tx * TS + 8, b.ty * TS + 8, 6)) breakBush(b);
+  for (const rn of cur.runes || []) if (!flags[rn.flag] && inArc(rn.tx * TS + 8, rn.ty * TS + 6, 8)) lightRune(rn);
+  for (const o of cur.obs || []) if (!flags[o.flag] && (o.kind === 'vines' || o.kind === 'rocks') && o.tiles.some(([tx, ty]) => inArc(tx * TS + 8, ty * TS + 8, 8))) hitObstacle(o, w);
+  if (boss && boss.active && inArc(boss.x, boss.y - 24, 20)) { hurtBoss(dmg); any = true; }
+  // magic finishers: a shockwave once the fists are strong, a rainbow star burst when they are super strong
+  if (big && lv >= 2) {
+    const R = 20 + lv * 5;
+    fx.push({ kind: 'ring', x: hx, y: hy + 4, t: 0, dur: 0.35, r: R, col, rainbow: lv >= 3 });
+    for (const e of enemies) if (!e.dead && e.hurt <= 0 && Math.hypot(e.x - hx, e.y - 6 - hy) < R) hurtEnemy(e, 1, hx, hy);
+    if (lv >= 3) for (let i = 0; i < 12; i++) { const an = i / 12 * Math.PI * 2; poofs.push({ x: hx, y: hy, vx: Math.cos(an) * 90, vy: Math.sin(an) * 60, life: 0.45, col: RAINBOW[i % 6] }); }
+    tone(90, 0.2, 'square', 0.06, 40, 0.03);
+  }
+  if (any && big) tone(1200, 0.1, 'square', 0.05, 1800, 0.06);
+}
+function drawFist(cx, cy, a) {
+  const w = curW(), p = Math.min(1, a.t / a.dur), ext = Math.sin(p * Math.PI);
+  const ca = Math.cos(a.ang), sa = Math.sin(a.ang), kick = a.kind === 'kick';
+  const ox = hero.x - cx - sa * a.side * 3, oy = hero.y - cy - (kick ? 4 : 11) + ca * a.side * 2;
+  const reach = w.reach * (a.big ? 1.6 : 1), dist = 4 + ext * reach * 0.75;
+  const x = ox + ca * dist, y = oy + sa * dist;
+  const spr = (kick ? FIST_SPR.foot : FIST_SPR.fist)[ca < 0 ? 1 : 0];
+  const sc = a.big ? 1 + 0.9 * ext : 1, W = Math.round(spr.width * sc), H = Math.round(spr.height * sc);
+  const col = w.tint || w.color;
+  // speed lines behind the fist
+  ctx.globalAlpha = 0.7 * ext; ctx.fillStyle = a.lv >= 1 ? col : '#FFFFFF';
+  for (let k = 1; k <= 3; k++) for (const o of [-2, 2]) ctx.fillRect(Math.round(x - ca * (4 + k * 3) - sa * o), Math.round(y - sa * (4 + k * 3) + ca * o), 1, 1);
+  // magic sparkles once the fists get stronger
+  if (a.lv >= 1) for (let k = 0; k < a.lv + (a.big ? 3 : 0); k++) { const an = clock * 9 + k * 2.1, r = 5 + k + (a.big ? 4 : 0); ctx.fillStyle = a.lv >= 3 ? RAINBOW[k % 6] : k % 2 ? '#FFFFFF' : col; ctx.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y + Math.sin(an) * r * 0.8), 2, 2); }
+  ctx.globalAlpha = 1;
+  ctx.drawImage(spr, Math.round(x - W / 2), Math.round(y - H / 2), W, H);
+  // POW star at the peak of a big hit
+  if (a.big && p > 0.35 && p < 0.8) {
+    const r = 6 + 4 * ext; ctx.fillStyle = '#FFFFFF';
+    for (let i = 0; i < 8; i++) { const an = i / 8 * Math.PI * 2; ctx.fillRect(Math.round(x + ca * 4 + Math.cos(an) * r), Math.round(y + sa * 4 + Math.sin(an) * r), i % 2 ? 1 : 2, i % 2 ? 1 : 2); }
+  }
+}
+
+// ---------------------------------------------------------------- hook the new attacks into the game
+const _meleeHits = meleeHits;
+meleeHits = function () { const w = curW(); if (w.brawl && hero.atk && hero.atk.brawl) return brawlHits(w, hero.atk); return _meleeHits(); };
+const _updateAdventure = updateAdventure;
+updateAdventure = function (dt) { _updateAdventure(dt); updateBolts(dt); };
+const _drawAttack = drawAttack;
+drawAttack = function (cx, cy) {
+  const all = shots, a = hero.atk, br = a && a.brawl;
+  shots = shots.filter(s => !s.bolt); if (br) hero.atk = null;
+  try { _drawAttack(cx, cy); } finally { shots = all; if (br) hero.atk = a; }
+  drawBolts(cx, cy);
+  if (br) drawFist(cx, cy, a);
+};
 
 buildSprites();
 buildSPR3();
