@@ -4048,7 +4048,7 @@ const FURN = [
   { id: 'fishtank', name: 'Fish tank', price: 50, w: 2, h: 1, light: '#3DF2FF' },
   { id: 'piano', name: 'Tiny piano', price: 60, w: 2, h: 1, note: 'walk up to play' },
   { id: 'startree', name: 'Star tree', price: 70, w: 1, h: 1, light: '#FFD23F' },
-  { id: 'arcade', name: 'Arcade game', price: 90, w: 1, h: 1, light: '#B18CFF', note: 'plays mini games' },
+  { id: 'arcade', name: 'Arcade game', price: 90, w: 1, h: 1, light: '#B18CFF', note: 'plays Comet Crunch' },
   { id: 'castlebed', name: 'Castle bed', price: 140, w: 2, h: 2 },
   { id: 'disco', name: 'Disco ball', price: 220, w: 1, h: 1, light: 'disco' },
   { id: 'throne', name: 'Rainbow throne', price: 320, w: 1, h: 1, light: 'rainbow' },
@@ -4208,7 +4208,7 @@ function updateHome(dt) {
     if (d.id === 'bench') { openBench(); return; }
     if (d.id === 'trophies') { openTrophies(); return; }
     if (d.id === 'piano') { [523, 659, 784, 659, 523, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.09, null, i * 0.16)); for (let i = 0; i < 6; i++) poofs.push({ x: x0 + 16 + rand(-10, 10), y: y0 - 10, vx: rand(-15, 15), vy: rand(-50, -25), life: 1, col: pick(RAINBOW) }); }
-    if (d.id === 'arcade') { sfx.good(); startPuzzle({ def: pick(GHOSTS), winText: 'High score!', loseText: 'Game over!', onEnd(won) { if (won) { coins += 2; store.set('coins', coins); drawCoins(); } } }); return; }
+    if (d.id === 'arcade') { arcStart(); return; }
   }
 }
 function homeDrawables(list) {
@@ -12775,6 +12775,446 @@ window.__isle = { buildIsle, buildGrave, buildHall, startWisps, get wisp() { ret
   window.__lmap = { get z() { return z; }, get zFit() { return zFit; }, get px() { return px; }, get tab() { return tab; }, signs: () => lm && lm.signs };
 }
 
-window.__g = { get state() { return state; }, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
+// ================================================================ Comet Crunch (arc*): the real arcade game inside the Arcade cabinet you can buy for your house.
+// An original space shooter: the Shadow King flung gloom rocks into the night sky. Fly your rainbow rocket and crunch them
+// into stardust. Big rocks crack into smaller ones, ghost saucers zip past, rainbow stars give a triple shot, and bubbles
+// make a shield. Touch and hold to fly toward your finger (touch close to the rocket to just turn); Easy always shoots
+// by itself. Keys: arrows to turn and fly, space to shoot. The high score table is shared by every save game, and the
+// ghosts' made-up scores are there to beat.
+const ARC_FONT = (() => {
+  const G = {
+    A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111', F: '111100110100100',
+    G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111',
+    M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100', Q: '010101101110011', R: '110101110101101',
+    S: '011100010001110', T: '111010010010010', U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101',
+    Y: '101101010010010', Z: '111001010100111', 0: '111101101101111', 1: '010110010010111', 2: '110001010100111', 3: '110001010001110',
+    4: '101101111001001', 5: '111100110001110', 6: '011100111101111', 7: '111001010010010', 8: '111101111101111', 9: '111101111001110',
+    '!': '010010010000010', '.': '000000000000010', ':': '000010000010000', '-': '000000111000000', "'": '010010000000000',
+    '?': '110001010000010', '+': '000010111010000', '/': '001001010100100', ' ': '000000000000000',
+  };
+  return G;
+})();
+// pixel text: x is the centre (align 'c'), left edge ('l') or right edge ('r')
+function arcText(s, x, y, col, k = 1, align = 'c') {
+  s = String(s).toUpperCase();
+  const w = s.length * 4 * k - k;
+  let X = Math.round(align === 'c' ? x - w / 2 : align === 'r' ? x - w : x); const Y = Math.round(y);
+  for (const pass of [0, 1]) {
+    ctx.fillStyle = pass ? col : OUT;
+    for (let i = 0; i < s.length; i++) {
+      const g = ARC_FONT[s[i]] || ARC_FONT['?'], ox = X + i * 4 * k + (pass ? 0 : k), oy = Y + (pass ? 0 : k);
+      for (let b = 0; b < 15; b++) if (g[b] === '1') ctx.fillRect(ox + (b % 3) * k, oy + Math.floor(b / 3) * k, k, k);
+    }
+  }
+}
+// split words into lines that fit a width in pixels
+function arcWrap(s, w) {
+  const max = Math.max(4, Math.floor((w + 1) / 4)), out = [];
+  for (const word of s.split(' ')) { const l = out.length ? out[out.length - 1] : null; if (l !== null && (l + ' ' + word).length <= max) out[out.length - 1] = l + ' ' + word; else out.push(word); }
+  return out;
+}
+// the high score table: kept outside the save slots so sisters can race each other
+const ARC_KEY = 'rgr-arcade';
+const ARC_SEED = {
+  easy: [['SUNNY', 1500], ['MEEP', 1000], ['SPLASH', 700], ['SPROUT', 400], ['BUBBLES', 200]],
+  tricky: [['SUNNY', 4000], ['MEEP', 3000], ['SPLASH', 2000], ['SPROUT', 1200], ['BUBBLES', 600]],
+};
+function arcTable() {
+  let t = null; try { t = JSON.parse(localStorage.getItem(ARC_KEY) || 'null'); } catch {}
+  if (!t || typeof t !== 'object') t = {};
+  for (const m of ['easy', 'tricky']) if (!Array.isArray(t[m])) t[m] = ARC_SEED[m].map(([n, s]) => ({ n, s, ghost: true }));
+  return t;
+}
+function arcSaveTable(t) { try { localStorage.setItem(ARC_KEY, JSON.stringify(t)); } catch {} }
+function arcBest(m) { return Math.max(...arcTable()[m].map(e => e.s), 0); }
+// returns the place (1-5) the score earned, or 0
+function arcRecord(m, name, s) {
+  const t = arcTable(), L = t[m];
+  L.push({ n: name, s, when: Date.now() }); L.sort((a, b) => b.s - a.s);
+  const place = L.findIndex(e => e.s === s && e.n === name && e.when) + 1;
+  t[m] = L.slice(0, 5); arcSaveTable(t);
+  return place >= 1 && place <= 5 ? place : 0;
+}
+
+const ARC_R = [0, 4, 8, 14];                 // rock radius by size
+const ARC_PTS = [0, 100, 50, 20];            // points by size (small rocks are hardest to hit)
+const ARC_ROCK_COL = ['#C77DFF', '#3DF2FF', '#FF6FB5', '#B9FF6B', '#FF9F1C', '#FFD23F'];
+let arc = null;
+function arcHidden() { return ['hudL', 'tracker', 'stars', 'coins', 'dashBtn', 'atkBtn', 'swapBtn', 'powBtn', 'powSwap', 'bossBar', 'decoBtn', 'bagBtn', 'hmMapBtn', 'fishBtn', 'fishBar', 'stick'].filter(id => $(id) && !$(id).hidden); }
+function arcExitBtn() {
+  let b = $('arcExit');
+  if (!b) {
+    b = document.createElement('button'); b.id = 'arcExit'; b.className = 'sq'; b.hidden = true; b.setAttribute('aria-label', 'Stop playing the arcade game');
+    b.style.cssText = 'position:fixed;z-index:6;top:calc(14px + env(safe-area-inset-top, 0px));left:calc(var(--gutter-l, 0px) + 4px);color:#3DF2FF';
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h3v2h2v2h4V7h2V5h3v3h-2v2h-2v4h2v2h2v3h-3v-2h-2v-2h-4v2H8v2H5v-3h2v-2h2v-4H7V8H5z" fill="currentColor"/></svg>';
+    b.addEventListener('click', (e) => { e.stopPropagation(); sfx.tap(); arcLeave(); });
+    document.body.appendChild(b);
+  }
+  return b;
+}
+function arcStart() {
+  if (arc) return;
+  const A = arc = {
+    screen: 'title', t: 0, st: 0, easy: mode !== 'tricky',
+    hidden: arcHidden(), stars: [], rocks: [], shots: [], eshots: [], parts: [], pops: [], saucer: null, ship: null,
+    score: 0, lives: 0, wave: 0, nextLife: 0, banner: null, ptr: null, fireT: 0, saucerT: 0, coinsWon: 0, place: 0,
+  };
+  A.hidden.forEach(id => $(id).hidden = true);
+  hero.path = []; marker = null; touch = null;
+  arcExitBtn().hidden = false;
+  for (let i = 0; i < 90; i++) A.stars.push({ x: Math.random(), y: Math.random(), b: Math.random(), p: Math.random() * 6.3, c: pick(['#FFFFFF', '#FFE9A8', '#BFE6FF', '#FFC2E0']) });
+  // some lazy rocks drift behind the title, like an arcade waiting for a coin
+  for (let i = 0; i < 5; i++) arcRock(A, Math.random() * VW, Math.random() * VH, 1 + (i % 3), 0.5);
+  state = 'arcade';
+  sfx.good();
+}
+function arcLeave() {
+  const A = arc; if (!A) return;
+  if (A.screen === 'play' && A.score > 0) arcGameOver(A, true);
+  arc = null;
+  arcExitBtn().hidden = true;
+  A.hidden.forEach(id => { if ($(id) && id !== 'stick') $(id).hidden = false; });
+  if (state === 'arcade') state = 'play';
+  last = performance.now();
+  if (A.coinsWon) setTimeout(() => toast(`+${A.coinsWon} coins from Comet Crunch!`), 250);
+}
+function arcRock(A, x, y, size, slow = 1) {
+  const sp = (size === 3 ? rand(10, 20) : size === 2 ? rand(18, 30) : rand(28, 42)) * slow * (A.easy ? 0.7 : Math.min(1.5, 1 + A.wave * 0.06));
+  const a = Math.random() * Math.PI * 2, n = 9 + Math.floor(Math.random() * 3), pts = [];
+  for (let i = 0; i < n; i++) pts.push(rand(0.72, 1.08));
+  const r = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size, r: ARC_R[size], rot: Math.random() * 6.3, vr: rand(-1, 1) * (size === 3 ? 0.5 : 1.1), pts, col: pick(ARC_ROCK_COL), hit: 0 };
+  A.rocks.push(r); return r;
+}
+function arcNewShip(A) {
+  A.ship = { x: VW / 2, y: VH / 2, vx: 0, vy: 0, a: -Math.PI / 2, safe: A.easy ? 3 : 2.2, thrust: 0, dead: 0, triple: 0, shield: 0 };
+}
+function arcBegin(A) {
+  Object.assign(A, { screen: 'play', st: 0, score: 0, lives: A.easy ? 5 : 3, wave: 0, rocks: [], shots: [], eshots: [], pops: [], saucer: null, coinsWon: A.coinsWon, place: 0, isBest: false, saucerT: 12 });
+  A.easy = mode !== 'tricky';
+  A.nextLife = A.easy ? 2500 : 5000;
+  arcNewShip(A); arcWave(A);
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, 'square', 0.05, null, i * 0.07));
+}
+function arcWave(A) {
+  A.wave++;
+  const n = A.easy ? Math.min(2 + Math.floor((A.wave - 1) / 2), 6) : Math.min(3 + A.wave, 9);
+  const s = A.ship;
+  for (let i = 0; i < n; i++) {
+    let x, y, k = 0;
+    do { const e = Math.floor(Math.random() * 4); x = e < 2 ? Math.random() * VW : (e === 2 ? 0 : VW); y = e < 2 ? (e ? 0 : VH) : Math.random() * VH; k++; }
+    while (s && Math.hypot(x - s.x, y - s.y) < 70 && k < 20);
+    arcRock(A, x, y, 3);
+  }
+  A.banner = { text: 'WAVE ' + A.wave, t: 1.8 };
+  A.saucerT = A.easy ? 16 : 11;
+}
+function arcBurst(A, x, y, col, n = 14, sp = 60) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = rand(sp * 0.3, sp); A.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rand(0.5, 1), col: i % 3 ? col : '#FFFFFF' }); }
+}
+function arcAddScore(A, n) {
+  A.score += n;
+  if (A.score >= A.nextLife) { A.nextLife += A.easy ? 2500 : 5000; if (A.lives < 9) { A.lives++; A.pops.push({ x: VW / 2, y: VH - 24, text: 'EXTRA ROCKET!', col: '#B9FF6B', t: 1.6 }); [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.1, 'triangle', 0.08, null, i * 0.08)); } }
+}
+function arcCrunch(A, r, i) {
+  A.rocks.splice(i, 1);
+  arcAddScore(A, ARC_PTS[r.size]);
+  A.pops.push({ x: r.x, y: r.y - 4, text: String(ARC_PTS[r.size]), col: r.col, t: 0.8 });
+  arcBurst(A, r.x, r.y, r.col, r.size * 7, 30 + r.size * 12);
+  tone(r.size === 3 ? 90 : r.size === 2 ? 140 : 220, 0.22, 'sawtooth', 0.06, 40);
+  tone(r.size === 3 ? 600 : 900, 0.12, 'triangle', 0.05, 200);
+  if (r.size > 1) {
+    for (let k = 0; k < 2; k++) { const c = arcRock(A, r.x, r.y, r.size - 1); c.col = r.col; c.vx += r.vx * 0.4; c.vy += r.vy * 0.4; }
+  } else {
+    // small rocks turn into stardust, and sometimes leave a treat
+    for (let k = 0; k < 8; k++) A.parts.push({ x: r.x, y: r.y, vx: rand(-14, 14), vy: rand(-14, 14), life: rand(1, 1.8), col: pick(RAINBOW), dust: true });
+    if (Math.random() < (A.easy ? 0.16 : 0.1)) A.pops.push({ x: r.x, y: r.y, item: Math.random() < 0.55 ? 'star' : 'bubble', t: 8, vx: r.vx * 0.3, vy: r.vy * 0.3 });
+  }
+  if (!A.rocks.length) setTimeout(() => { if (arc === A && A.screen === 'play' && !A.rocks.length) arcWave(A); }, 1200);
+}
+function arcShoot(A) {
+  const s = A.ship; if (!s || s.dead || A.shots.length > 7) return;
+  const spread = s.triple > 0 ? [-0.22, 0, 0.22] : [0];
+  for (const d of spread) {
+    const a = s.a + d;
+    A.shots.push({ x: s.x + Math.cos(a) * 7, y: s.y + Math.sin(a) * 7, vx: Math.cos(a) * 190 + s.vx * 0.5, vy: Math.sin(a) * 190 + s.vy * 0.5, life: 0.85, col: s.triple > 0 ? pick(RAINBOW) : (heroDef && heroDef.glow) || '#FFFFFF' });
+  }
+  tone(s.triple > 0 ? 1320 : 1040, 0.07, 'square', 0.035, 380);
+}
+function arcHurt(A) {
+  const s = A.ship;
+  if (s.shield > 0) { s.shield = 0; s.safe = 1.2; arcBurst(A, s.x, s.y, '#9AE8FF', 18, 50); tone(500, 0.3, 'triangle', 0.08, 1400); return; }
+  arcBurst(A, s.x, s.y, (heroDef && heroDef.glow) || '#FFFFFF', 28, 80); arcBurst(A, s.x, s.y, '#FFD23F', 12, 40);
+  tone(160, 0.6, 'sawtooth', 0.08, 30); sfx.bad();
+  s.dead = 1.6; A.lives--;
+  if (A.lives <= 0) { s.dead = 99; setTimeout(() => { if (arc === A && A.screen === 'play') arcGameOver(A); }, 1400); }
+}
+function arcGameOver(A, quiet) {
+  A.screen = 'over'; A.st = 0;
+  const name = ((heroDef && heroDef.name) || 'YOU').toUpperCase(), m = A.easy ? 'easy' : 'tricky';
+  const wasBest = arcBest(m);
+  A.place = A.score > 0 ? arcRecord(m, name, A.score) : 0;
+  A.isBest = A.score > wasBest;
+  const gain = A.score >= 100 ? Math.min(15, Math.max(1, Math.floor(A.score / 300))) : 0;
+  if (gain) { coins += gain; store.set('coins', coins); if (typeof drawCoins === 'function') drawCoins(); A.coinsWon += gain; A.gain = gain; } else A.gain = 0;
+  if (typeof bump === 'function') { bump('arcade_games'); if (A.score > (stats.arcade_best || 0)) { stats.arcade_best = A.score; statsDirty = true; } }
+  if (quiet) return;
+  if (A.isBest) { sfx.win(); if (typeof confetti === 'function') confetti(); }
+  else [392, 330, 262, 196].forEach((f, i) => tone(f, 0.22, 'square', 0.05, null, i * 0.16));
+}
+function arcUpdate(dt) {
+  const A = arc; if (!A) return;
+  A.t += dt; A.st += dt;
+  const W = VW, H = VH, wrap = (o, m = 0) => { if (o.x < -m) o.x += W + m * 2; else if (o.x > W + m) o.x -= W + m * 2; if (o.y < -m) o.y += H + m * 2; else if (o.y > H + m) o.y -= H + m * 2; };
+  for (const r of A.rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt; r.hit = Math.max(0, r.hit - dt); wrap(r, r.r); }
+  for (const p of A.parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * (p.dust ? 0.7 : 1.4); if (!p.dust) { p.vx *= 1 - dt * 1.5; p.vy *= 1 - dt * 1.5; } }
+  A.parts = A.parts.filter(p => p.life > 0);
+  for (const p of A.pops) { p.t -= dt; if (p.item) { p.x += p.vx * dt; p.y += p.vy * dt; wrap(p, 4); } else p.y -= dt * 10; }
+  A.pops = A.pops.filter(p => p.t > 0);
+  if (A.banner) { A.banner.t -= dt; if (A.banner.t <= 0) A.banner = null; }
+  if (A.screen !== 'play') return;
+  const s = A.ship;
+  // ---- steering: finger, then keys
+  let turn = 0, thrust = false, fire = A.easy;
+  if (s.dead > 0) {
+    s.dead -= dt;
+    if (s.dead <= 0 && A.lives > 0) { const near = A.rocks.some(r => Math.hypot(r.x - W / 2, r.y - H / 2) < r.r + 26); if (near && s.dead > -2.5) s.dead = 0.01; else { arcNewShip(A); tone(660, 0.25, 'triangle', 0.07, 1320); } }
+  } else {
+    if (A.ptr) {
+      const tx = A.ptr.x, ty = A.ptr.y, want = Math.atan2(ty - s.y, tx - s.x);
+      let d = want - s.a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      const rate = (A.easy ? 7 : 6) * dt; s.a += Math.max(-rate, Math.min(rate, d));
+      if (Math.hypot(tx - s.x, ty - s.y) > 22 && Math.abs(d) < 1.2) thrust = true;
+      fire = true;
+    }
+    if (keys.has('arrowleft') || keys.has('a')) turn--; if (keys.has('arrowright') || keys.has('d')) turn++;
+    if (keys.has('arrowup') || keys.has('w')) thrust = true;
+    if (keys.has(' ') || keys.has('x') || keys.has('j')) fire = true;
+    s.a += turn * 4.6 * dt;
+    const acc = A.easy ? 120 : 150, max = A.easy ? 80 : 110;
+    if (thrust) { s.vx += Math.cos(s.a) * acc * dt; s.vy += Math.sin(s.a) * acc * dt; if (Math.random() < 0.6) A.parts.push({ x: s.x - Math.cos(s.a) * 5, y: s.y - Math.sin(s.a) * 5, vx: -Math.cos(s.a + rand(-0.4, 0.4)) * 40 + s.vx, vy: -Math.sin(s.a + rand(-0.4, 0.4)) * 40 + s.vy, life: 0.45, col: pick(RAINBOW) }); }
+    const v = Math.hypot(s.vx, s.vy); if (v > max) { s.vx *= max / v; s.vy *= max / v; }
+    const fr = Math.pow(thrust ? 0.9 : A.easy ? 0.35 : 0.6, dt); s.vx *= fr; s.vy *= fr;
+    s.x += s.vx * dt; s.y += s.vy * dt; wrap(s, 3);
+    s.thrust = thrust; s.safe = Math.max(0, s.safe - dt); s.triple = Math.max(0, s.triple - dt);
+    A.fireT -= dt;
+    if (fire && A.fireT <= 0) { arcShoot(A); A.fireT = A.easy ? 0.3 : 0.22; }
+  }
+  // ---- shots
+  for (const b of A.shots) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); }
+  for (let i = A.shots.length - 1; i >= 0; i--) {
+    const b = A.shots[i]; if (b.life <= 0) { A.shots.splice(i, 1); continue; }
+    const ri = A.rocks.findIndex(r => Math.hypot(r.x - b.x, r.y - b.y) < r.r + (A.easy ? 2.5 : 1));
+    if (ri >= 0) { A.shots.splice(i, 1); arcCrunch(A, A.rocks[ri], ri); continue; }
+    const u = A.saucer; if (u && Math.hypot(u.x - b.x, u.y - b.y) < 9) { A.shots.splice(i, 1); arcSaucerPop(A); }
+  }
+  // ---- the ghost saucer: zips across, and on Tricky drops slow gloom bubbles at you
+  A.saucerT -= dt;
+  if (!A.saucer && A.saucerT <= 0 && A.wave >= (A.easy ? 2 : 2)) {
+    const left = Math.random() < 0.5;
+    A.saucer = { x: left ? -12 : W + 12, y: rand(30, H - 30), y0: 0, vx: (left ? 1 : -1) * (A.easy ? 26 : 36), t: 0, shootT: 1.5, g: pick(GHOSTS) };
+    A.saucer.y0 = A.saucer.y; A.saucerT = rand(14, 22);
+  }
+  const u = A.saucer;
+  if (u) {
+    u.t += dt; u.x += u.vx * dt; u.y = u.y0 + Math.sin(u.t * 2) * 14;
+    if (Math.floor(u.t * 6) !== Math.floor((u.t - dt) * 6)) tone(Math.floor(u.t * 6) % 2 ? 880 : 740, 0.05, 'triangle', 0.025);
+    if (!A.easy && s.dead <= 0) { u.shootT -= dt; if (u.shootT <= 0) { u.shootT = 1.8; const a = Math.atan2(s.y - u.y, s.x - u.x) + rand(-0.35, 0.35); A.eshots.push({ x: u.x, y: u.y, vx: Math.cos(a) * 55, vy: Math.sin(a) * 55, life: 3 }); tone(300, 0.15, 'triangle', 0.05, 180); } }
+    if (u.x < -20 || u.x > W + 20) A.saucer = null;
+  }
+  for (const b of A.eshots) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); }
+  A.eshots = A.eshots.filter(b => b.life > 0);
+  // ---- treats and bumps
+  if (s.dead <= 0) {
+    for (const p of A.pops) if (p.item && Math.hypot(p.x - s.x, p.y - s.y) < 9) {
+      p.t = 0;
+      if (p.item === 'star') { s.triple = 9; A.pops.push({ x: s.x, y: s.y - 10, text: 'RAINBOW SHOTS!', col: '#FFD23F', t: 1.2 }); }
+      else { s.shield = 1; A.pops.push({ x: s.x, y: s.y - 10, text: 'BUBBLE SHIELD!', col: '#9AE8FF', t: 1.2 }); }
+      [880, 1175, 1568].forEach((f, i) => tone(f, 0.09, 'triangle', 0.08, null, i * 0.06));
+    }
+    if (s.safe <= 0) {
+      const hitR = A.easy ? 3 : 4;
+      const r = A.rocks.find(r => Math.hypot(r.x - s.x, r.y - s.y) < r.r * 0.85 + hitR);
+      const e = A.eshots.find(b => Math.hypot(b.x - s.x, b.y - s.y) < 3 + hitR);
+      const sc = u && Math.hypot(u.x - s.x, u.y - s.y) < 8 + hitR;
+      if (r || e || sc) {
+        if (e) e.life = 0;
+        if (r && s.shield > 0) { const i = A.rocks.indexOf(r); arcCrunch(A, r, i); }
+        if (sc && s.shield > 0) arcSaucerPop(A);
+        arcHurt(A);
+      }
+    }
+  }
+}
+function arcSaucerPop(A) {
+  const u = A.saucer; if (!u) return;
+  A.saucer = null; arcAddScore(A, 200);
+  A.pops.push({ x: u.x, y: u.y - 6, text: '200', col: u.g.color || '#FFD23F', t: 1 });
+  arcBurst(A, u.x, u.y, u.g.color || '#C77DFF', 22, 70); sfx.poof();
+  if (Math.random() < 0.5) A.pops.push({ x: u.x, y: u.y, item: Math.random() < 0.5 ? 'star' : 'bubble', t: 8, vx: 0, vy: 6 });
+}
+// ---------------------------------------------------------------- drawing
+function arcDrawRock(r) {
+  const n = r.pts.length;
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) { const a = r.rot + (i % n) / n * Math.PI * 2, k = r.pts[i % n] * r.r; const x = r.x + Math.cos(a) * k, y = r.y + Math.sin(a) * k; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.closePath();
+  ctx.fillStyle = '#1C1236'; ctx.fill();
+  ctx.globalAlpha = r.hit > 0 ? 0.6 : 0.28; ctx.fillStyle = r.col; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = r.col; ctx.lineWidth = 1.4; ctx.stroke();
+  if (r.size >= 2) {
+    // a grumpy-sleepy face that peeks at your rocket
+    const s = arc && arc.ship, la = s ? Math.atan2(s.y - r.y, s.x - r.x) : 0, e = r.size === 3 ? 4 : 2, X = Math.round(r.x), Y = Math.round(r.y - (r.size === 3 ? 2 : 1));
+    const lx = Math.round(Math.cos(la)), ly = Math.round(Math.sin(la) * 0.6);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - e - 1, Y - 1, 3, 2); ctx.fillRect(X + e - 1, Y - 1, 3, 2);
+    ctx.fillStyle = OUT; ctx.fillRect(X - e + lx, Y - 1 + Math.max(0, ly), 1, 1); ctx.fillRect(X + e + lx, Y - 1 + Math.max(0, ly), 1, 1);
+    ctx.fillStyle = r.col; ctx.fillRect(X - e - 1, Y - 2, 3, 1); ctx.fillRect(X + e - 1, Y - 2, 3, 1);
+    if (r.size === 3) { ctx.fillStyle = OUT; ctx.fillRect(X - 1, Y + 4, 3, 1); }
+  }
+}
+function arcDrawShip(s, X, Y, a, k = 1) {
+  const pt = (ang, rr) => [X + Math.cos(a + ang) * rr * k, Y + Math.sin(a + ang) * rr * k];
+  const nose = pt(0, 7), l = pt(2.45, 6), back = pt(Math.PI, 2.5), r = pt(-2.45, 6), col = (heroDef && heroDef.glow) || '#FF6FB5';
+  ctx.beginPath(); ctx.moveTo(...nose); ctx.lineTo(...l); ctx.lineTo(...back); ctx.lineTo(...r); ctx.closePath();
+  ctx.fillStyle = '#2A1F4A'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
+  // a rainbow stripe and a little window
+  const w = pt(0, 2.5); ctx.fillStyle = '#BFF4FF'; ctx.fillRect(Math.round(w[0]) - 1, Math.round(w[1]) - 1, 2, 2);
+  if (s && s.thrust) { const f = pt(Math.PI, 5 + Math.random() * 3); ctx.strokeStyle = RAINBOW[Math.floor(Math.random() * 6)]; ctx.beginPath(); ctx.moveTo(...back); ctx.lineTo(...f); ctx.stroke(); }
+}
+function arcDrawSaucer(u) {
+  const X = Math.round(u.x), Y = Math.round(u.y), spr = SPR.ghost[u.g.id];
+  if (spr) { const img = spr[Math.floor(u.t * 4) % 2]; ctx.drawImage(img, X - Math.round(img.width * 0.25), Y - Math.round(img.height * 0.5) + 2, Math.round(img.width * 0.5), Math.round(img.height * 0.5)); }
+  ctx.fillStyle = OUT; ctx.fillRect(X - 11, Y + 1, 22, 5);
+  ctx.fillStyle = '#6B5A9A'; ctx.fillRect(X - 10, Y + 2, 20, 3); ctx.fillStyle = '#A99BE0'; ctx.fillRect(X - 10, Y + 2, 20, 1);
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = RAINBOW[(i + Math.floor(u.t * 8)) % 6]; ctx.fillRect(X - 8 + i * 5, Y + 3, 2, 1); }
+}
+function arcDrawItem(p) {
+  const X = Math.round(p.x), Y = Math.round(p.y + Math.sin(arc.t * 4 + p.x) * 1.5);
+  if (p.t < 2 && Math.floor(p.t * 8) % 2) return;
+  if (p.item === 'star') {
+    ctx.fillStyle = RAINBOW[Math.floor(arc.t * 8) % 6];
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / 5 + arc.t; for (let rr = 0; rr < 5; rr++) ctx.fillRect(Math.round(X + Math.cos(a) * rr), Math.round(Y + Math.sin(a) * rr), 1, 1); }
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - 1, Y - 1, 2, 2);
+  } else {
+    ctx.strokeStyle = '#9AE8FF'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(X, Y, 4.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - 2, Y - 3, 2, 1);
+  }
+}
+function arcDraw() {
+  const A = arc; if (!A) return;
+  const W = VW, H = VH;
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.fillStyle = '#07041A'; ctx.fillRect(0, 0, W, H);
+  // the night sky: a soft nebula, twinkly stars and a ringed candy planet
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.18; ctx.drawImage(glow('#9B5DE5', 90), Math.round(W * 0.2 - 90), Math.round(H * 0.3 - 90)); ctx.drawImage(glow('#FF4FA0', 70), Math.round(W * 0.8 - 70), Math.round(H * 0.75 - 70));
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  for (const st of A.stars) { ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(A.t * (0.6 + st.b) + st.p)); ctx.fillStyle = st.c; ctx.fillRect(Math.floor(st.x * W), Math.floor(st.y * H), st.b > 0.9 ? 2 : 1, 1); }
+  ctx.globalAlpha = 1;
+  { const X = Math.round(W * 0.84), Y = Math.round(H * 0.24);
+    ctx.fillStyle = '#3A1E5E'; ctx.beginPath(); ctx.arc(X, Y, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5A2E86'; ctx.beginPath(); ctx.arc(X - 2, Y - 2, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#FF9ACB'; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.ellipse(X, Y, 15, 3, -0.3, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+  // play things
+  for (const r of A.rocks) arcDrawRock(r);
+  for (const p of A.pops) if (p.item) arcDrawItem(p);
+  if (A.saucer) arcDrawSaucer(A.saucer);
+  for (const b of A.eshots) { ctx.fillStyle = '#2A1440'; ctx.fillRect(Math.round(b.x) - 2, Math.round(b.y) - 2, 4, 4); ctx.fillStyle = '#C77DFF'; ctx.fillRect(Math.round(b.x) - 1, Math.round(b.y) - 1, 2, 2); }
+  for (const b of A.shots) { ctx.fillStyle = b.col; ctx.fillRect(Math.round(b.x) - 1, Math.round(b.y) - 1, 2, 2); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(Math.round(b.x), Math.round(b.y), 1, 1); }
+  const s = A.ship;
+  if (A.screen === 'play' && s && s.dead <= 0 && !(s.safe > 0 && Math.floor(A.t * 10) % 2)) {
+    arcDrawShip(s, s.x, s.y, s.a, 1.3);
+    if (s.shield > 0) { ctx.strokeStyle = '#9AE8FF'; ctx.globalAlpha = 0.6 + 0.3 * Math.sin(A.t * 6); ctx.beginPath(); ctx.arc(s.x, s.y, 12, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+  }
+  for (const p of A.parts) { ctx.globalAlpha = Math.max(0, Math.min(1, p.life)); ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+  ctx.globalAlpha = 1;
+  // neon glow on top
+  ctx.globalCompositeOperation = 'lighter';
+  for (const r of A.rocks) { ctx.globalAlpha = 0.32; const gr = r.r + 6; ctx.drawImage(glow(r.col, gr), Math.round(r.x - gr), Math.round(r.y - gr)); }
+  for (const b of A.shots) { ctx.globalAlpha = 0.6; ctx.drawImage(glow(b.col, 5), Math.round(b.x - 5), Math.round(b.y - 5)); }
+  if (A.screen === 'play' && s && s.dead <= 0) { ctx.globalAlpha = 0.35; ctx.drawImage(glow((heroDef && heroDef.glow) || '#FF6FB5', 14), Math.round(s.x - 14), Math.round(s.y - 14)); }
+  if (A.saucer) { ctx.globalAlpha = 0.4; ctx.drawImage(glow(A.saucer.g.color || '#C77DFF', 16), Math.round(A.saucer.x - 16), Math.round(A.saucer.y - 16)); }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  for (const p of A.pops) if (p.text) arcText(p.text, p.x, p.y, p.col);
+  // words and numbers
+  const m = A.easy ? 'easy' : 'tricky', hi = Math.max(arcBest(m), A.score);
+  if (A.screen === 'play') {
+    arcText(String(A.score), W / 2 - 4, 5, '#FFFFFF', 1, 'r');
+    arcText('HI ' + hi, W / 2 + 4, 5, '#FFD23F', 1, 'l');
+    for (let i = 0; i < Math.min(A.lives, 9); i++) arcDrawShip(null, 10 + i * 9, H - 9, -Math.PI / 2, 0.75);
+    arcText('WAVE ' + A.wave, W - 6, H - 11, '#9AE8FF', 1, 'r');
+    if (A.banner) arcText(A.banner.text, W / 2, H / 2 - 24, RAINBOW[Math.floor(A.t * 8) % 6], 2);
+    if (A.wave === 1 && A.st < 6 && Math.floor(A.st * 2) % 2 === 0) { const L = arcWrap(A.easy ? 'HOLD YOUR FINGER WHERE YOU WANT TO GO' : 'TOUCH FAR TO FLY - NEAR TO AIM', W - 10); L.forEach((ln, i) => arcText(ln, W / 2, H - 22 - (L.length - 1 - i) * 7, '#FFFFFF')); }
+  } else if (A.screen === 'title') {
+    ctx.fillStyle = 'rgba(7,4,26,.55)'; ctx.fillRect(0, 0, W, H);
+    const k = W >= 230 ? 3 : 2, ty = Math.max(16, Math.round(H * 0.12));
+    const word = (w, y, o) => w.split('').forEach((c, i) => arcText(c, W / 2 + (i - (w.length - 1) / 2) * 4 * k, y + Math.round(Math.sin(A.t * 3 + i + o) * 1.5), RAINBOW[(i + o) % 6], k));
+    word('COMET', ty, 0); word('CRUNCH', ty + 6 * k + 2, 3);
+    arcDrawShip({ thrust: true }, W / 2, ty + 12 * k + 12, -Math.PI / 2 + Math.sin(A.t * 2) * 0.2, 1.4);
+    const tb = arcTable()[m], y0 = ty + 12 * k + 26;
+    arcText((A.easy ? 'EASY' : 'TRICKY') + ' HIGH SCORES', W / 2, y0, '#9AE8FF');
+    tb.forEach((e, i) => {
+      const y = y0 + 9 + i * 8, col = e.ghost ? '#B9A8E8' : ['#FFD23F', '#FFFFFF', '#FF9F1C', '#B9FF6B', '#3DF2FF'][i];
+      arcText(String(i + 1) + '.', W / 2 - 38, y, col, 1, 'l'); arcText(e.n.slice(0, 7), W / 2 - 28, y, col, 1, 'l'); arcText(String(e.s), W / 2 + 38, y, col, 1, 'r');
+    });
+    const yb = Math.min(H - 20, y0 + 9 + 5 * 8 + 4);
+    if (Math.floor(A.t * 2) % 2 === 0) arcText('TAP TO PLAY', W / 2, yb, '#FFFFFF');
+    arcWrap(A.easy ? 'HOLD YOUR FINGER TO FLY - YOU SHOOT BY YOURSELF' : 'HOLD TO FLY AND SHOOT - TOUCH NEAR YOUR ROCKET TO AIM', W - 10).forEach((ln, i) => arcText(ln, W / 2, yb + 9 + i * 7, '#B9A8E8'));
+  } else if (A.screen === 'over') {
+    ctx.fillStyle = 'rgba(7,4,26,.6)'; ctx.fillRect(0, 0, W, H);
+    const cy = Math.round(H / 2) - 34;
+    arcText('GAME OVER', W / 2, cy, '#FF6FB5', 2);
+    arcText('SCORE ' + A.score, W / 2, cy + 18, '#FFFFFF');
+    if (A.isBest) arcText('NEW HIGH SCORE!', W / 2, cy + 28, RAINBOW[Math.floor(A.t * 10) % 6], 1);
+    else if (A.place) arcText('YOU GOT PLACE ' + A.place + '!', W / 2, cy + 28, '#B9FF6B');
+    else arcText('HI ' + arcBest(m), W / 2, cy + 28, '#FFD23F');
+    if (A.gain) arcText('+' + A.gain + ' COINS', W / 2, cy + 38, '#FFD23F');
+    if (A.st > 1.2 && Math.floor(A.t * 2) % 2 === 0) arcText('TAP TO PLAY AGAIN', W / 2, cy + 54, '#FFFFFF');
+  }
+  // old arcade screen glass: scanlines and dark corners
+  ctx.fillStyle = 'rgba(0,0,0,.16)'; for (let y = 0; y < H; y += 2) ctx.fillRect(0, y, W, 1);
+  ctx.drawImage(vignette, 0, 0);
+}
+// ---------------------------------------------------------------- hooking in
+function arcPtr(e) { return { x: e.clientX / SCALE, y: e.clientY / SCALE, id: e.pointerId }; }
+canvas.addEventListener('pointerdown', (e) => {
+  if (state !== 'arcade' || !arc) return;
+  e.preventDefault(); audio();
+  const A = arc;
+  if (A.screen === 'title' && A.st > 0.3) { arcBegin(A); return; }
+  if (A.screen === 'over') { if (A.st > 1.2) arcBegin(A); return; }
+  if (A.screen === 'play') { A.ptr = arcPtr(e); canvas.setPointerCapture?.(e.pointerId); if (A.fireT <= 0) { arcShoot(A); A.fireT = A.easy ? 0.3 : 0.22; } }
+});
+canvas.addEventListener('pointermove', (e) => { if (state === 'arcade' && arc && arc.ptr && arc.ptr.id === e.pointerId) arc.ptr = arcPtr(e); });
+const arcUp = (e) => { if (arc && arc.ptr && arc.ptr.id === e.pointerId) arc.ptr = null; };
+canvas.addEventListener('pointerup', arcUp); canvas.addEventListener('pointercancel', arcUp);
+addEventListener('keydown', (e) => {
+  if (state !== 'arcade' || !arc) return;
+  const k = e.key.toLowerCase();
+  if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+  if (k === 'escape') { arcLeave(); return; }
+  if ((k === ' ' || k === 'enter') && !e.repeat) { if (arc.screen === 'title' && arc.st > 0.3) arcBegin(arc); else if (arc.screen === 'over' && arc.st > 1.2) arcBegin(arc); }
+});
+const _arcUpdate = update;
+update = function (dt) {
+  if (state === 'arcade') { clock += dt; arcUpdate(dt); return; }
+  if (arc) arcLeave(); // something else (the pause menu, a save load) took us away
+  _arcUpdate(dt);
+};
+const _arcRender = render;
+render = function () { if (state === 'arcade') { arcDraw(); return; } _arcRender(); };
+// an original chiptune for the cabinet: a bouncy E minor space tune
+addTrack('arcade', {
+  bpm: 136, patch: { lead: 'square', pad: null, arp: 'pluck', bass: 'pulse' }, mix: { lead: 0.75, arp: 0.6, bass: 0.9, drums: 0.8 }, fx: { delay: 0.8, verb: 0.6 },
+  chords: 'Em C D B  Em C Am B',
+  lead: `E5/2 G5/2 B5/4 A5/2 G5/2 | E5/4 G5/2 C6/6 -/2 | D6/2 C6/2 B5/2 A5/2 F#5/4 D5/4 | B4/2 D#5/2 F#5/4 B5/6 -/2 |
+         B5/2 A5/2 G5/2 E5/2 G5/4 B5/4 | C6/4 B5/2 G5/2 E5/8 | A5/2 C6/2 E6/4 D6/2 C6/2 A5/4 | B5/4 A5/2 F#5/2 D#5/6 -/2`,
+  bass: 'r.r.o.r.r.r.o.r.', arp: '0.2.4.2.0.2.4.2.',
+  drums: { k: 'x.......x.......', s: '....x.......x...', h: '..x...x...x...x.' },
+});
+addMusicRule(() => state === 'arcade' ? 'arcade' : null);
+if (typeof TROPHIES !== 'undefined') TROPHIES.push(
+  { id: 'arcade1', name: 'Comet Cruncher', desc: 'Score 1000 in Comet Crunch on the Arcade game', tier: 'silver', icon: 'star', test: () => (stats.arcade_best || 0) >= 1000 },
+);
+window.__g = { get state() { return state; }, arcStart, get arc() { return arc; }, arcBegin: () => arc && arcBegin(arc), arcTable, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
 </script>
 <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script></body></html>
