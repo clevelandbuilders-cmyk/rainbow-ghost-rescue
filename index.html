@@ -169,6 +169,49 @@
   #fade { position: fixed; inset: 0; z-index: 8; background: var(--night); opacity: 0; pointer-events: none; transition: opacity .25s; }
   #fade.on { opacity: 1; }
 
+
+  /* ---------- pause menu, options and save games */
+  #pauseBtn { color: var(--gold); }
+  #menu { z-index: 30; background: rgba(14, 9, 32, .86); }
+  .menubox { --edge: var(--cyan); width: min(760px, 100%); max-height: 100%; overflow: auto; touch-action: pan-y; box-sizing: border-box; padding: 18px 20px 22px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .menubox h2 { margin: 0; font: 700 clamp(34px, 7vmin, 64px)/1 var(--pixel); text-align: center; }
+  .menubox .mnote { margin: 0; min-height: 1.2em; font: 600 clamp(16px, 2.8vmin, 22px)/1.25 var(--pixel); color: var(--muted); text-align: center; }
+  .mlist { display: flex; flex-direction: column; gap: 16px; width: min(460px, 100%); }
+  .mbtn { border: 0; cursor: pointer; min-height: 76px; padding: 0 22px; display: flex; align-items: center; gap: 18px; font: 700 clamp(24px, 4.4vmin, 36px)/1 var(--pixel); color: var(--text);
+    background: #2A1F4A; box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--mc, var(--line)), 0 0 18px -2px var(--mc, transparent); text-align: left; }
+  .mbtn svg { width: 40px; height: 40px; flex: none; color: var(--mc, var(--cyan)); filter: drop-shadow(0 0 5px currentColor); }
+  .mbtn:active { transform: translateY(3px); }
+  .mbtn.go { --mc: var(--lime); background: #1F3A2A; }
+  .mbtn.small { min-height: 58px; font-size: clamp(19px, 3.4vmin, 26px); }
+  .mbtn.small svg { width: 30px; height: 30px; }
+  .mrow { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; width: 100%; }
+  .mrow .mbtn { flex: 1 1 200px; }
+  .opt { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 10px 16px; align-items: center; width: min(560px, 100%); }
+  .opt > b { font: 700 clamp(22px, 4vmin, 32px)/1 var(--pixel); display: flex; align-items: center; gap: 12px; }
+  .opt > b svg { width: 34px; height: 34px; color: var(--cyan); }
+  .vol { display: flex; align-items: center; gap: 10px; }
+  .vol .sq { width: 60px; height: 60px; font: 700 34px/1 var(--pixel); color: var(--gold); }
+  .pips { display: flex; gap: 5px; }
+  .pips i { width: 14px; height: 30px; background: var(--line); }
+  .pips i.on { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  .seg { display: flex; gap: 12px; }
+  .seg button { border: 0; cursor: pointer; min-width: 96px; min-height: 60px; padding: 0 16px; font: 700 clamp(19px, 3.4vmin, 26px)/1 var(--pixel); color: var(--muted); background: #2A1F4A; box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--night); background: var(--gold); box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--gold), 0 0 16px var(--gold); }
+  .slots { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; width: 100%; }
+  .slot { --sc: var(--line); position: relative; flex: 1 1 190px; max-width: 230px; min-height: 120px; border: 0; cursor: pointer; padding: 14px 12px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background: #2A1F4A; box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--sc); color: var(--text); }
+  .slot.cur { --sc: var(--lime); box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--sc), 0 0 22px var(--sc); }
+  .slot .sname { font: 700 clamp(22px, 4vmin, 30px)/1.05 var(--pixel); word-break: break-word; }
+  .slot .sstat { display: flex; gap: 14px; font: 700 20px/1 var(--pixel); color: var(--gold); align-items: center; }
+  .slot .sstat .coin { width: 16px; height: 16px; }
+  .slot .stag { font: 700 14px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--lime); }
+  .slot .stag.new { color: var(--muted); }
+  .slot .sedit { position: absolute; top: 4px; right: 4px; width: 40px; height: 40px; box-shadow: none; background: transparent; color: var(--muted); }
+  .slot .sedit svg { width: 22px; height: 22px; }
+  .holdbtn { position: relative; overflow: hidden; --mc: #FF5A5F; }
+  .holdbtn .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255, 90, 95, .45); pointer-events: none; }
+  .holdbtn span { position: relative; }
+
   /* ---------- full-screen layers */
   .layer {
     position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box;
@@ -394,7 +437,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
-  <p class="tver">version 20.1</p>
+  <p class="tver">version 21</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -414,6 +457,7 @@
     <span id="starN">0</span>
   </div>
   <div class="stars coinchip frame" id="coins" hidden aria-label="Coins"><span class="coin"></span><span id="coinN">0</span></div>
+  <button class="sq" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg></button>
   <button class="sq" id="soundBtn" aria-label="Sound" aria-pressed="true"><svg viewBox="0 0 24 24" id="soundIcon" aria-hidden="true"></svg></button>
 </div>
 <button class="sq" id="dashBtn" hidden aria-label="Dash">
@@ -435,6 +479,7 @@
 <button class="sq" id="flyExit" hidden aria-label="Stop flying"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h3v2h2v2h4V7h2V5h3v3h-2v2h-2v4h2v2h2v3h-3v-2h-2v-2h-4v2H8v2H5v-3h2v-2h2v-4H7V8H5z" fill="currentColor"/></svg></button>
 <div id="flyTap" hidden>Tap to fly!</div>
 <div id="toast" hidden></div>
+<div class="layer" id="menu" hidden role="dialog" aria-modal="true" aria-label="Pause menu"><div class="menubox frame" id="menuBox"></div></div>
 <div id="trophyPop" class="frame" hidden></div>
 <div class="layer" id="trophyRoom" hidden>
   <div class="shopbox trophybox frame">
@@ -502,7 +547,7 @@
     <div class="port ghost frame" id="pzGhost"></div>
   </div>
   <div class="pz-arena" id="pzArena"></div>
-  <div class="pz-tools"><button class="pbtn" id="pzReset" hidden>Start over</button></div>
+  <div class="pz-tools"><button class="pbtn" id="pzReset" hidden>Start over</button><button class="sq" id="pzPause" aria-label="Pause" style="color: var(--gold)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg></button></div>
 </div>
 
 <div class="layer" id="celebrate" hidden></div>
@@ -1213,9 +1258,19 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// save games: slot 1 uses the original rgr2- keys (so older saves carry over), slots 2 and 3 get their own prefix
+const SLOTS = 3;
+const slotPfx = (n) => n === 1 ? 'rgr2-' : 'rgr2s' + n + '-';
+let SLOT = 1;
+try { SLOT = Math.min(SLOTS, Math.max(1, parseInt(localStorage.getItem('rgr-slot') || '1', 10) || 1)); } catch {}
+const PFX = slotPfx(SLOT);
+// options are shared by every save game and live outside the slots
+const OPTS = Object.assign({ music: 4, sfx: 4, voice: true }, (() => { try { return JSON.parse(localStorage.getItem('rgr-opts') || '{}') || {}; } catch { return {}; } })());
+const saveOpts = () => { try { localStorage.setItem('rgr-opts', JSON.stringify(OPTS)); } catch {} };
+let menuOpen = false;
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('rgr2-' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('rgr2-' + k, JSON.stringify(v)); } catch {} },
+  get(k, d) { try { const v = localStorage.getItem(PFX + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(PFX + k, JSON.stringify(v)); } catch {} },
 };
 
 // ================================================================ chiptune sound, made from tones
@@ -1226,6 +1281,8 @@ function audio() {
   return ac;
 }
 function tone(f, dur = 0.15, type = 'square', vol = 0.06, f2 = null, delay = 0) {
+  if (!OPTS.sfx) return;
+  vol *= OPTS.sfx / 4;
   const a = audio(); if (!a) return;
   const t0 = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t0);
@@ -1740,7 +1797,7 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (paused) return;
+  if (paused || menuOpen) return;
   update(dt);
   if (!paused) render();
 }
@@ -1807,11 +1864,12 @@ let voEl = null, voWant = null, voWantT = 0;
 const voSaid = {};
 function say(name) {
   const v = VO[name]; if (!v) return 0;
+  if (!OPTS.voice) return v.len;
   voWant = name; voWantT = performance.now();
   if (muted) return v.len;
   try {
     if (voEl) voEl.pause();
-    voEl = new Audio(v.src);
+    voEl = new Audio(v.src); voEl.volume = 1;
     const p = voEl.play(); if (p && p.then) p.then(() => { if (voWant === name) voWant = null; }).catch(() => {});
   } catch {}
   return v.len;
@@ -1879,7 +1937,7 @@ function startPuzzle(g, kindIn) {
   const loop = (now) => {
     if (!p.alive) return;
     const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-    if (p.timeMax && !p.done) {
+    if (p.timeMax && !p.done && !menuOpen) {
       p.time -= dt;
       const f = Math.max(0, p.time / p.timeMax);
       $('pzTimeFill').style.transform = `scaleX(${f})`;
@@ -4874,7 +4932,10 @@ function musicTick() {
     mus.step++; mus.next += dt;
   }
   // volume: off when muted, lower under the narrator's voice, during puzzles and under a fanfare
-  let target = muted ? 0 : 0.55;
+  let target = muted ? 0 : 0.55 * OPTS.music / 4;
+  if (menuOpen) target *= 0.4;
+  const fanT = muted ? 0 : 0.9 * Math.min(1, OPTS.music / 4 + 0.001);
+  if (mus.fan && Math.abs(mus.fan.gain.value - fanT) > 0.01) mus.fan.gain.value = fanT;
   if (typeof voEl !== 'undefined' && voEl && !voEl.paused) target *= 0.35;
   if (typeof state !== 'undefined' && state === 'puzzle') target *= 0.5;
   if (ac.currentTime < mus.duckUntil) target *= 0.2;
@@ -9029,6 +9090,219 @@ function sideLights(cx, cy) {
   ctx.globalAlpha = 1;
 }
 
+// ================================================================ pause menu: play, options, save games (v21)
+const MI = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3v2h2v2h2v2h2v2h2v2h-2v2h-2v2h-2v2h-2v2H7z" fill="currentColor"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4v3h2v-1h2v2h-1v2h3v4h-3v2h1v2h-2v-1h-2v3h-4v-3H8v1H6v-2h1v-2H4V8h3V6H6V4h2v1h2zM10 9v6h4V9z" fill="currentColor"/></svg>',
+  disk: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h15l3 3v15H3zM6 5v5h10V5zM12 6h3v3h-3zM6 13v6h12v-6z" fill="currentColor"/></svg>',
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h-2v2h-2v2h-2v2H8v4h2v2h2v2h2v2h2z" fill="currentColor"/></svg>',
+  music: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h12v14h-2v2h-4v-2h-2v-2h2v-2h4V7h-8v10H9v2H5v-2H3v-2h2v-2h4z" fill="currentColor"/></svg>',
+  sound: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3zM15 9h2v6h-2zM19 6h2v12h-2z" fill="currentColor"/></svg>',
+  voice: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12h-9l-5 4v-4H4zM7 8v2h10V8zM7 11v2h7v-2z" fill="currentColor"/></svg>',
+  mode: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v4h2v2h4v2h-3v3h1v4h-2v-2h-2v2h-2v-2H9v2H7v-4h1v-3H5V8h4V6h2z" fill="currentColor"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h2v2h2v2h1v2h-2v2h-2v2h-2v2h-2v2h-2v2H9v2H3v-6h2v-2h2V9h2V7h2V5h2V3z" fill="currentColor"/></svg>',
+  save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v9h2v-2h2v2h-2v2h-2v2h-2v-2H9v-2H7v-2h2v2h2zM4 17h3v2h10v-2h3v4H4z" fill="currentColor"/></svg>',
+  load: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 16h2V7h2v2h2V7h-2V5h-2V3h-2v2H9v2H7v2h2V7h2zM4 17h3v2h10v-2h3v4H4z" fill="currentColor"/></svg>',
+  erase: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8v2h5v2H3V5h5zM5 8h14v13H5zM8 10v9h2v-9zM14 10v9h2v-9z" fill="currentColor"/></svg>',
+};
+let menuWas = false, menuVo = null, holdT = null;
+const slotNames = () => { try { return JSON.parse(localStorage.getItem('rgr-slots') || '{}') || {}; } catch { return {}; } };
+const slotName = (n) => slotNames()[n] || 'Game ' + n;
+function slotKeys(n) {
+  const pf = slotPfx(n), out = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(pf)) out.push(k); } } catch {}
+  return out;
+}
+function slotInfo(n) {
+  const pf = slotPfx(n), get = (k, d) => { try { const v = localStorage.getItem(pf + k); return v === null ? d : JSON.parse(v); } catch { return d; } };
+  const flags = get('flags', {}) || {};
+  return { used: slotKeys(n).length > 0, stars: get('wins', 0) || 0, coins: get('coins', 0) || 0, houses: Object.keys(flags).filter(k => k.startsWith('home_') && flags[k]).length };
+}
+function menuEsc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function openMenu() {
+  if (menuOpen || (titleUp && !$('title').hidden)) return;
+  menuWas = paused; paused = true; menuOpen = true;
+  hero.path = []; marker = null; touch = null; keys.clear(); $('stick').hidden = true;
+  if (voEl && !voEl.paused) { menuVo = voEl; voEl.pause(); } else menuVo = null;
+  sfx.tap();
+  $('menu').hidden = false;
+  menuMain();
+}
+function closeMenu() {
+  if (!menuOpen) return;
+  clearTimeout(holdT);
+  $('menu').hidden = true; menuOpen = false;
+  paused = menuWas; last = performance.now();
+  if (menuVo && menuVo === voEl && OPTS.voice && !muted) menuVo.play().catch(() => {});
+  menuVo = null;
+  sfx.tap();
+}
+function menuMain(note) {
+  const n = slotName(SLOT);
+  $('menuBox').innerHTML = `<h2 class="glowtext">Paused</h2>
+    <p class="mnote" id="menuNote">${note || 'Playing ' + menuEsc(n)}</p>
+    <div class="mlist">
+      <button class="mbtn go" id="mPlay">${MI.play}Play</button>
+      <button class="mbtn" id="mSave" style="--mc: var(--gold)">${MI.disk}Save game</button>
+      <button class="mbtn" id="mOpts" style="--mc: var(--cyan)">${MI.gear}Options</button>
+    </div>`;
+  $('mPlay').onclick = closeMenu;
+  $('mOpts').onclick = () => { sfx.click(); menuOptions(); };
+  $('mSave').onclick = () => { sfx.good(); menuSaves('Saved! Your game also saves by itself as you play.'); };
+  $('mPlay').focus();
+}
+
+// ---------------------------------------------------------------- options
+function menuOptions() {
+  const pips = (v) => Array.from({ length: 5 }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('');
+  const volRow = (key, label, icon) => `<b>${icon}${label}</b><div class="vol"><button class="sq" data-v="${key}" data-d="-1" aria-label="${label} quieter">-</button><div class="pips" id="pip_${key}" aria-label="${label} ${OPTS[key]} of 5">${pips(OPTS[key])}</div><button class="sq" data-v="${key}" data-d="1" aria-label="${label} louder">+</button></div>`;
+  $('menuBox').innerHTML = `<h2 class="glowtext">Options</h2>
+    <div class="opt">
+      ${volRow('music', 'Music', MI.music)}
+      ${volRow('sfx', 'Sounds', MI.sound)}
+      <b>${MI.voice}Voice</b><div class="seg"><button id="oVoOn" aria-pressed="${OPTS.voice}">On</button><button id="oVoOff" aria-pressed="${!OPTS.voice}">Off</button></div>
+      <b>${MI.mode}Puzzles</b><div class="seg"><button id="oEasy" aria-pressed="${mode === 'easy'}">Easy</button><button id="oTricky" aria-pressed="${mode === 'tricky'}">Tricky</button></div>
+    </div>
+    <p class="mnote" id="menuNote">${muted ? 'All sound is off. Tap the speaker button to turn it back on.' : ''}</p>
+    <div class="mlist"><button class="mbtn small" id="mBack">${MI.back}Back</button></div>`;
+  $('menuBox').querySelectorAll('[data-v]').forEach(b => b.onclick = () => {
+    const k = b.dataset.v; OPTS[k] = Math.max(0, Math.min(5, OPTS[k] + Number(b.dataset.d))); saveOpts();
+    $('pip_' + k).innerHTML = pips(OPTS[k]); $('pip_' + k).setAttribute('aria-label', k + ' ' + OPTS[k] + ' of 5');
+    if (k === 'sfx') sfx.note(OPTS.sfx); else sfx.click();
+  });
+  const setVo = (on) => { OPTS.voice = on; saveOpts(); if (!on) hush(); $('oVoOn').setAttribute('aria-pressed', String(on)); $('oVoOff').setAttribute('aria-pressed', String(!on)); sfx.click(); if (on && VO['pick']) say('pick'); };
+  $('oVoOn').onclick = () => setVo(true); $('oVoOff').onclick = () => setVo(false);
+  const setM = (m) => {
+    mode = m; store.set('mode', m); sfx.click();
+    $('oEasy').setAttribute('aria-pressed', String(m === 'easy')); $('oTricky').setAttribute('aria-pressed', String(m === 'tricky'));
+    if ($('modeEasy')) { $('modeEasy').setAttribute('aria-pressed', String(m === 'easy')); $('modeTricky').setAttribute('aria-pressed', String(m === 'tricky')); }
+    $('menuNote').textContent = m === 'easy' ? 'Easy: no timers, simpler puzzles.' : 'Tricky: harder puzzles with timers.';
+  };
+  $('oEasy').onclick = () => setM('easy'); $('oTricky').onclick = () => setM('tricky');
+  $('mBack').onclick = () => { sfx.click(); menuMain(); };
+}
+
+// ---------------------------------------------------------------- save games
+function menuSaves(note) {
+  const cards = Array.from({ length: SLOTS }, (_, i) => {
+    const n = i + 1, inf = slotInfo(n), cur = n === SLOT;
+    const tag = cur ? '<span class="stag">Playing now</span>' : inf.used ? '<span class="stag" style="color:var(--cyan)">Tap to play</span>' : '<span class="stag new">New game</span>';
+    const stat = inf.used || cur ? `<span class="sstat"><span>&#9733; ${inf.stars}</span><span><span class="coin"></span> ${inf.coins}</span></span>${inf.houses ? `<span class="sstat" style="color:var(--pink)">${inf.houses} house${inf.houses > 1 ? 's' : ''} saved</span>` : ''}` : '';
+    return `<div class="slot${cur ? ' cur' : ''}" role="button" tabindex="0" data-slot="${n}" aria-label="${menuEsc(slotName(n))}${cur ? ', playing now' : ''}">
+      <button class="sq sedit" data-name="${n}" aria-label="Change the name of ${menuEsc(slotName(n))}">${MI.pencil}</button>
+      <span class="sname">${menuEsc(slotName(n))}</span>${stat}${tag}</div>`;
+  }).join('');
+  $('menuBox').innerHTML = `<h2 class="glowtext">Save games</h2>
+    <p class="mnote" id="menuNote">${note || 'Each player can have their own game.'}</p>
+    <div class="slots">${cards}</div>
+    <div class="mrow">
+      <button class="mbtn small" id="mExport" style="--mc: var(--lime)">${MI.save}Backup</button>
+      <button class="mbtn small" id="mImport" style="--mc: var(--cyan)">${MI.load}Load backup</button>
+      <button class="mbtn small" id="mErase" style="--mc: #FF5A5F">${MI.erase}Start over</button>
+    </div>
+    <div class="mlist"><button class="mbtn small" id="mBack">${MI.back}Back</button></div>`;
+  $('menuBox').querySelectorAll('.slot').forEach(el => {
+    const go = () => { const n = Number(el.dataset.slot); if (n === SLOT) { sfx.click(); $('menuNote').textContent = 'You are playing ' + slotName(n) + '.'; } else { sfx.click(); menuSwitch(n); } };
+    el.onclick = (e) => { if (e.target.closest('.sedit')) return; go(); };
+    el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+  });
+  $('menuBox').querySelectorAll('.sedit').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const n = Number(b.dataset.name);
+    let nm = null; try { nm = prompt('Name for this game (like a player\'s name):', slotName(n)); } catch {}
+    if (nm === null) return;
+    nm = nm.trim().slice(0, 14);
+    const all = slotNames(); if (nm) all[n] = nm; else delete all[n];
+    try { localStorage.setItem('rgr-slots', JSON.stringify(all)); } catch {}
+    sfx.good(); menuSaves();
+  });
+  $('mExport').onclick = menuExport;
+  $('mImport').onclick = menuImport;
+  $('mErase').onclick = () => { sfx.click(); menuErase(); };
+  $('mBack').onclick = () => { sfx.click(); menuMain(); };
+}
+function menuConfirm(title, text, yesLabel, yesIcon, onYes, hold) {
+  $('menuBox').innerHTML = `<h2 class="glowtext">${title}</h2>
+    <p class="mnote" style="max-width:520px">${text}</p>
+    <div class="mlist">
+      <button class="mbtn go" id="mNo">${MI.back}No, go back</button>
+      <button class="mbtn${hold ? ' holdbtn' : ''}" id="mYes" style="--mc: ${hold ? '#FF5A5F' : 'var(--gold)'}">${hold ? '<i class="fill" id="mFill"></i>' : ''}${yesIcon}<span>${yesLabel}</span></button>
+    </div>`;
+  $('mNo').onclick = () => { sfx.click(); clearTimeout(holdT); menuSaves(); };
+  $('mNo').focus();
+  const yes = $('mYes');
+  if (!hold) { yes.onclick = onYes; return; }
+  // a grown-up step: the button has to be held down for 2 seconds
+  const fill = $('mFill');
+  const start = (e) => {
+    e.preventDefault(); clearTimeout(holdT);
+    fill.style.transition = 'width 2s linear'; fill.style.width = '100%';
+    holdT = setTimeout(onYes, 2000);
+  };
+  const stop = () => { clearTimeout(holdT); fill.style.transition = 'width .2s'; fill.style.width = '0'; };
+  yes.addEventListener('pointerdown', start);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => yes.addEventListener(ev, stop));
+  yes.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) start(e); });
+  yes.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') stop(); });
+}
+function menuSwitch(n) {
+  const inf = slotInfo(n);
+  menuConfirm('Play ' + menuEsc(slotName(n)) + '?',
+    inf.used ? `This game has ${inf.stars} stars and ${inf.coins} coins. ${menuEsc(slotName(SLOT))} stays saved.` : `This starts a brand new game. ${menuEsc(slotName(SLOT))} stays saved.`,
+    'Yes, play it', MI.play, () => { try { localStorage.setItem('rgr-slot', String(n)); } catch {} location.reload(); });
+}
+function eraseSlot(n) { slotKeys(n).forEach(k => { try { localStorage.removeItem(k); } catch {} }); }
+function menuErase() {
+  menuConfirm('Start over?', `This erases <b>${menuEsc(slotName(SLOT))}</b>: all stars, coins, houses and treasures. The other save games stay safe.<br><br>Grown-ups: press and hold the red button.`,
+    'Hold to erase', MI.erase, () => { eraseSlot(SLOT); location.reload(); }, true);
+}
+function menuExport() {
+  const data = {};
+  slotKeys(SLOT).forEach(k => { data[k.slice(PFX.length)] = localStorage.getItem(k); });
+  const file = { game: 'rainbow-ghost-rescue', v: 1, name: slotName(SLOT), saved: new Date().toISOString(), data };
+  try {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'rainbow-ghost-' + slotName(SLOT).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    sfx.good(); $('menuNote').textContent = 'Backup file saved to your downloads.';
+  } catch { $('menuNote').textContent = 'Sorry, this device could not save a backup file.'; }
+}
+function menuImport() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    f.text().then(txt => {
+      let file = null; try { file = JSON.parse(txt); } catch {}
+      if (!file || file.game !== 'rainbow-ghost-rescue' || !file.data || typeof file.data !== 'object') { $('menuNote').textContent = 'That file is not a Rainbow Ghost Rescue backup.'; return; }
+      menuConfirm('Load backup?', `This puts the backup "${menuEsc(file.name || 'game')}" into <b>${menuEsc(slotName(SLOT))}</b> and replaces what is there now.<br><br>Grown-ups: press and hold the button.`,
+        'Hold to load', MI.load, () => {
+          eraseSlot(SLOT);
+          for (const k in file.data) { const v = file.data[k]; if (typeof v === 'string') { try { localStorage.setItem(PFX + k, v); } catch {} } }
+          location.reload();
+        }, true);
+    });
+  };
+  inp.click();
+}
+$('pauseBtn').addEventListener('click', () => { if (menuOpen) closeMenu(); else openMenu(); });
+$('pzPause').addEventListener('click', openMenu);
+// Escape or P opens and closes the menu; other keys do nothing while it is open
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === 'escape' || (k === 'p' && !(e.target && e.target.tagName === 'INPUT'))) { e.preventDefault(); e.stopImmediatePropagation(); if (menuOpen) closeMenu(); else openMenu(); return; }
+  if (menuOpen && !(e.target && e.target.closest && e.target.closest('#menu'))) e.stopImmediatePropagation();
+}, true);
+// keys pressed on the menu's own buttons stay in the menu
+$('menu').addEventListener('keydown', (e) => e.stopPropagation());
+$('menu').addEventListener('keyup', (e) => e.stopPropagation());
+// leaving the app (home button, switching apps) pauses the game
+document.addEventListener('visibilitychange', () => { if (document.hidden && !menuOpen && state !== 'pick' && !(titleUp && !$('title').hidden)) openMenu(); });
+window.__menu = { open: openMenu, close: closeMenu, saves: () => menuSaves(), options: () => menuOptions(), get open_() { return menuOpen; } };
+
 buildSprites();
 buildSPR3();
 drawSound();
@@ -10788,6 +11062,21 @@ if (typeof TROPHIES !== 'undefined') TROPHIES.push(
     return _ht(x, y, w, rad, melee);
   };
   hmMapUI();
+}
+// Ollie's Map in the pause menu too
+if (typeof menuMain === 'function') {
+  const _mm = menuMain;
+  menuMain = function (...a) {
+    const res = _mm(...a);
+    try {
+      const play = $('mPlay'); if (!play || $('mMap')) return res;
+      const b = document.createElement('button'); b.className = 'mbtn'; b.id = 'mMap'; b.style.setProperty('--mc', '#E0A82E');
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5l6-2 8 3 6-2v15l-6 2-8-3-6 2zM8 5v13l8 3V8z" fill="currentColor"/></svg>Ollie\'s Map';
+      play.after(b);
+      b.onclick = () => { closeMenu(); if (state === 'play') hmOpenMap(); };
+    } catch (e) { console.warn(e); }
+    return res;
+  };
 }
 
 window.__g = { get state() { return state; }, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
