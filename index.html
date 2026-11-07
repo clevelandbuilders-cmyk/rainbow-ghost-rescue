@@ -390,7 +390,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
-  <p class="tver">version 19</p>
+  <p class="tver">version 20</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -2811,9 +2811,9 @@ function buildLand(id) {
     m.bushes.push({ tx, ty, alive: true, secret: m.bushes.length < 3 && r() < 0.5, t: 0 });
   }
   if (L.secret) { // sparkly bushes hide the gap until you have found the pond
-    if (!flags.pond_found) for (const [tx, ty] of L.secret.bushes) { m.bushes = m.bushes.filter(b => b.tx !== tx || b.ty !== ty); m.bushes.push({ tx, ty, alive: true, secret: true, t: 0 }); }
-    const [gx] = L.secret.lane;
-    for (let i = 0; i < 5; i++) m.lights.push({ x: (gx + 0.3 + i * 0.35) * TS, y: (0.6 + (i % 3) * 0.7) * TS, r: 9, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.7, fl: 2 });
+    if (!flags[L.secret.flag || 'pond_found']) for (const [tx, ty] of L.secret.bushes) { m.bushes = m.bushes.filter(b => b.tx !== tx || b.ty !== ty); m.bushes.push({ tx, ty, alive: true, secret: true, t: 0 }); }
+    const [gx, gy] = L.secret.glow || [L.secret.lane[0] + 0.3, 0.6];
+    for (let i = 0; i < 5; i++) m.lights.push({ x: (gx + i * 0.35) * TS, y: (gy + (i % 3) * 0.7) * TS, r: 9, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.7, fl: 2 });
   }
   m.bushes.forEach(b => setSolid(m, b.tx, b.ty, 2));
   // gates, runes and the crystal switch
@@ -8034,6 +8034,1006 @@ drawAttack = function (cx, cy) {
   drawBolts(cx, cy);
   if (br) drawFist(cx, cy, a);
 };
+
+// ================================================================ secret places, side quests and fishing
+// Treetop Village: hidden up the Great Tree between the 2nd and 3rd houses in town. Smash the sparkly bushes, climb the ladder.
+// Waterfall Grotto: behind sparkly bushes at the east edge of Whisper Woods. Behind the waterfall is the Echo Cavern.
+// Fishing: Fennel the frog by the town stream gives you a pole. Fish in any pond, lake, stream or the sea, and sell fish to Fennel.
+// Side quests: Fennel (catch 3 fish, fill the fish book), Elder Oakley (light the lanterns), Grandma Fern (fish soup),
+// Willow (find baby Bud at the waterfall), Digby the mole (glow stones in the cavern).
+// Everything here hooks in by wrapping existing functions, so other files only need this file added to build.py.
+let sqNpcs = [], sqCool = {}, fishing = null, fishBag = store.get('fishBag', {}), fishSeen = store.get('fishSeen', {}), fishTotal = store.get('fishTotal', 0);
+const hasPole = () => !!flags.pole;
+const goldPole = () => !!flags.fish_book;
+const sqSaveFish = () => { store.set('fishBag', fishBag); store.set('fishSeen', fishSeen); store.set('fishTotal', fishTotal); };
+const fishCount = () => Object.values(fishBag).reduce((a, b) => a + b, 0);
+const sqTalkD = (x, y) => Math.hypot(hero.x - x, hero.y - y);
+const sqCoins = (n) => { coins += n; store.set('coins', coins); drawCoins(); };
+
+// ---------------------------------------------------------------- the fish
+const FISH = {
+  minnow:  { name: 'Bubble Minnow', val: 2, body: '#7FD6F5', belly: '#DDF6FF', fin: '#3FA9E0', shape: 'slim' },
+  perch:   { name: 'Sunny Perch', val: 3, body: '#FFD23F', belly: '#FFF1A8', fin: '#FF9F1C', shape: 'fish', stripes: '#E89A00' },
+  puffer:  { name: 'Pink Puffer', val: 4, body: '#FF8FC8', belly: '#FFE1F0', fin: '#FF4FA0', shape: 'round' },
+  carp:    { name: 'Moss Carp', val: 4, body: '#5BAA55', belly: '#C8F0A8', fin: '#2F7C4B', shape: 'fish', spots: '#2F7C4B' },
+  guppy:   { name: 'Glow Guppy', val: 5, body: '#B9FF6B', belly: '#F2FFD0', fin: '#3DF2FF', shape: 'slim' },
+  trout:   { name: 'Frost Trout', val: 5, body: '#CFE6FF', belly: '#FFFFFF', fin: '#5FA8E8', shape: 'fish', spots: '#5FA8E8' },
+  pike:    { name: 'Icicle Pike', val: 7, body: '#8FEAFF', belly: '#E8FBFF', fin: '#2E8FC0', shape: 'long' },
+  snapper: { name: 'Star Snapper', val: 8, body: '#FF7A5A', belly: '#FFD0B8', fin: '#FFD23F', shape: 'fish', star: true },
+  moon:    { name: 'Moon Minnow', val: 10, body: '#C9BFFF', belly: '#FFFFFF', fin: '#9B8CF0', shape: 'slim', star: true },
+  koi:     { name: 'Crystal Koi', val: 12, body: '#E8F6FF', belly: '#FFFFFF', fin: '#3DF2FF', shape: 'fish', spots: '#FF7A5A' },
+  rainbow: { name: 'Rainbow Fin', val: 15, body: '#FF5A5F', belly: '#FFFFFF', fin: '#9B5DE5', shape: 'fish', rainbow: true },
+  golden:  { name: 'Golden Gill', val: 30, body: '#FFD23F', belly: '#FFF4B8', fin: '#FFB000', shape: 'fish', gold: true },
+  boot:    { name: 'Old Boot', val: 1, junk: true },
+};
+const FISH_BOOK = Object.keys(FISH).filter(k => !FISH[k].junk && k !== 'golden'); // 11 kinds, the golden one is a bonus
+// what bites where: [fish, how often]
+const WATERS = {
+  town:   [['minnow', 5], ['perch', 4], ['puffer', 2], ['golden', 0.3], ['boot', 1]],
+  meadow: [['minnow', 4], ['perch', 4], ['puffer', 3], ['golden', 0.3], ['boot', 1]],
+  woods:  [['minnow', 3], ['carp', 5], ['guppy', 2], ['golden', 0.3], ['boot', 1]],
+  frost:  [['trout', 5], ['pike', 3], ['minnow', 2], ['golden', 0.3], ['boot', 1]],
+  pond:   [['guppy', 4], ['moon', 2.5], ['minnow', 2], ['golden', 0.4], ['boot', 0.6]],
+  falls:  [['carp', 3], ['snapper', 3], ['rainbow', 1.6], ['minnow', 2], ['golden', 0.4], ['boot', 0.6]],
+  cave:   [['koi', 2], ['guppy', 4], ['moon', 1], ['golden', 0.4], ['boot', 0.6]],
+  cove:   [['snapper', 4], ['puffer', 3], ['minnow', 2], ['golden', 0.4], ['boot', 1]],
+  hollow: [['carp', 4], ['guppy', 3], ['minnow', 2], ['golden', 0.3], ['boot', 1]],
+};
+const FISH_WHERE = { minnow: 'almost anywhere', perch: 'Rainbow Town and Sunny Meadow', puffer: 'Sunny Meadow and Coral Cove', carp: 'Whisper Woods', guppy: 'the Firefly Pond and the cavern',
+  trout: 'Frosty Lake', pike: 'Frosty Lake', snapper: 'the waterfall and the sea', moon: 'the Firefly Pond', koi: 'the Echo Cavern', rainbow: 'the hidden waterfall', golden: 'anywhere, if you are very lucky' };
+function pickFish() {
+  const place = cur === OUTMAP ? 'town' : cur.landId;
+  const tbl = WATERS[place] || [['minnow', 5], ['boot', 1]], tricky = mode === 'tricky';
+  const w = tbl.map(([id, n]) => [id, n * (tricky && FISH[id].val >= 8 ? 1.6 : 1) * (goldPole() && FISH[id].val >= 8 ? 1.3 : 1)]);
+  let k = Math.random() * w.reduce((a, [, n]) => a + n, 0);
+  for (const [id, n] of w) { k -= n; if (k <= 0) return id; }
+  return w[0][0];
+}
+const fishSpr = {};
+function fishSprite(id) {
+  if (fishSpr[id]) return fishSpr[id];
+  const F = FISH[id], p = new PB(20, 13);
+  if (F.junk) { // an old boot
+    p.rect(7, 1, 6, 8, '#7A4A2E'); p.rect(3, 7, 10, 4, '#7A4A2E'); p.rect(3, 10, 11, 2, '#3A2433'); p.rect(8, 1, 1, 7, '#9A6A45');
+    p.rect(7, 1, 6, 1, '#B5835A'); p.set(10, 3, '#E8DDF5'); p.set(10, 5, '#E8DDF5'); p.set(5, 8, '#9A6A45'); p.set(15, 2, '#3BA07C'); p.set(16, 1, '#3BA07C');
+    return (fishSpr[id] = p.outline().canvas());
+  }
+  const col = (x) => F.rainbow ? RAINBOW[Math.min(5, Math.max(0, Math.floor((x - 2) / 2.3)))] : F.body;
+  const rx = F.shape === 'long' ? 7.5 : F.shape === 'round' ? 5 : 6, ry = F.shape === 'slim' ? 2.7 : F.shape === 'long' ? 2.3 : F.shape === 'round' ? 4.6 : 3.6, cx = F.shape === 'round' ? 8 : 8.5, cy = 6.5;
+  // tail
+  for (let i = 0; i < 4; i++) p.rect(cx + rx - 1 + i, cy - 1 - i, 1, 3 + i * 2, F.fin);
+  // fins
+  p.rect(cx - 1, cy - ry - 1, 4, 1, F.fin); p.rect(cx, cy - ry - 2, 2, 1, F.fin); p.rect(cx, cy + ry, 3, 1, F.fin);
+  p.ell(cx, cy, rx, ry, (x) => col(x));
+  p.ell(cx, cy + ry * 0.45, rx * 0.8, ry * 0.45, (x) => F.rainbow ? mixHex(col(x), '#FFFFFF', 0.45) : F.belly);
+  if (F.shape === 'long') { p.set(cx - rx - 1, cy, F.body); p.set(cx - rx - 2, cy, F.fin); }
+  if (F.stripes) for (const x of [cx - 1, cx + 2]) p.rect(x, cy - ry + 1, 1, ry * 2 - 2, F.stripes);
+  if (F.spots) [[cx, cy - 1], [cx + 3, cy], [cx + 1, cy + 1]].forEach(([x, y]) => p.set(x, y, F.spots));
+  if (F.shape === 'round') for (const [x, y] of [[cx - 2, cy - ry - 0.5], [cx + 2, cy - ry - 0.5], [cx + rx, cy - 2], [cx - 1, cy + ry + 0.5]]) p.set(x, y, F.fin);
+  if (F.star) { p.set(cx + 1, cy - 1, '#FFFFFF'); p.set(cx, cy, '#FFFFFF'); p.set(cx + 2, cy, '#FFFFFF'); p.set(cx + 1, cy + 1, '#FFFFFF'); }
+  if (F.gold) { p.set(cx - 2, cy - 2, '#FFFFFF'); p.set(cx + 2, cy - 2, '#FFFFFF'); p.set(cx + 3, cy - 1, '#FFFFFF'); }
+  const ex = Math.round(cx - rx * 0.55);
+  p.rect(ex, cy - 2, 2, 2, '#FFFFFF'); p.set(ex, cy - 1, EYE);
+  p.set(Math.round(cx - rx), cy + 1, mixHex(F.body, '#140C24', 0.5));
+  return (fishSpr[id] = p.outline().canvas());
+}
+const fishURL = {};
+const fishImg = (id) => fishURL[id] || (fishURL[id] = fishSprite(id).toDataURL());
+function fishShadowImg(id) { // a dark outline for fish you have not caught yet
+  const k = id + ':x'; if (fishURL[k]) return fishURL[k];
+  const s = fishSprite(id), c = mk(s.width, s.height), x = c.getContext('2d');
+  x.drawImage(s, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#3B2C6E'; x.fillRect(0, 0, c.width, c.height);
+  return (fishURL[k] = c.toDataURL());
+}
+
+// ---------------------------------------------------------------- the friendly folks: Leaflings, Fennel the frog, Digby the mole
+const SQS = {};
+function leaflingSprite(body, opt = {}) {
+  return [0, 1].map(f => {
+    const p = new PB(16, 20), dark = mixHex(body, '#1A1033', 0.4), light = mixHex(body, '#FFFFFF', 0.4);
+    p.rect(8, 1, 1, 4, '#3E8C4A'); p.ell(5.5, 2.5 + f * 0.5, 2.8, 1.4, opt.leaf || '#7CFF6B'); p.ell(11, 2 - f * 0.5, 2.6, 1.3, mixHex(opt.leaf || '#7CFF6B', '#1A4A2E', 0.25));
+    if (f) { p.rect(3, 17, 3, 2, dark); p.rect(10, 16, 3, 2, dark); } else { p.rect(4, 17, 3, 2, dark); p.rect(9, 17, 3, 2, dark); }
+    p.ell(8, 11.5, 6.5, 6.3, body); p.ell(6, 8.5, 3, 2, light); p.ell(8, 13.5, 4, 3.2, mixHex(body, '#FFFFFF', 0.55));
+    p.set(1, 12, body); p.set(1, 13, body); p.set(14, 12, body); p.set(14, 13, body);
+    p.rect(5, 9, 2, 3, EYE); p.rect(9, 9, 2, 3, EYE); p.set(5, 9, '#FFFFFF'); p.set(9, 9, '#FFFFFF');
+    p.set(4, 12, '#FF8FB1'); p.set(11, 12, '#FF8FB1'); p.rect(7, 13, 2, 1, EYE);
+    if (opt.beard) { p.ell(8, 15, 4.2, 2.6, '#F3EAFF'); p.rect(6, 12, 4, 1, '#F3EAFF'); p.rect(4, 7, 3, 1, '#F3EAFF'); p.rect(9, 7, 3, 1, '#F3EAFF'); }
+    if (opt.staff) { p.rect(14, 5, 1, 14, '#8A5A3A'); p.ell(14.5, 4, 1.6, 1.6, '#FFD23F'); }
+    if (opt.apron) { p.rect(5, 14, 6, 4, '#FFFFFF'); p.rect(5, 14, 6, 1, '#FF9ACB'); }
+    if (opt.bow) { p.rect(11, 4, 2, 2, '#FF4FA0'); p.rect(13, 3, 2, 4, '#FF4FA0'); p.rect(9, 3, 2, 4, '#FF4FA0'); }
+    if (opt.glasses) { p.rect(4, 9, 4, 1, '#FFD23F'); p.rect(8, 9, 4, 1, '#FFD23F'); }
+    return p.outline().canvas();
+  });
+}
+function budSprite() {
+  return [0, 1].map(f => {
+    const p = new PB(12, 14), body = '#FFD93D', dark = '#B08A00';
+    p.rect(6, 0, 1, 3, '#3E8C4A'); p.ell(4, 1.5 + f * 0.5, 2, 1, '#7CFF6B');
+    p.rect(3 - f, 12, 2, 2, dark); p.rect(7 + f, 12, 2, 2, dark);
+    p.ell(6, 8, 5, 4.6, body); p.ell(4.5, 6, 2, 1.4, '#FFF1A8');
+    p.rect(3, 6, 2, 2, EYE); p.rect(7, 6, 2, 2, EYE); p.set(3, 6, '#FFFFFF'); p.set(7, 6, '#FFFFFF'); p.set(2, 9, '#FF8FB1'); p.set(9, 9, '#FF8FB1'); p.set(5, 10, EYE); p.set(6, 10, EYE);
+    return p.outline().canvas();
+  });
+}
+function frogSprite() {
+  return [0, 1].map(f => {
+    const p = new PB(20, 20), g = '#5BC46A', gd = '#2F7C4B';
+    p.ell(10, 13, 8, 6, g); p.ell(10, 15, 5.5, 3.5, '#C8F0A8');
+    p.ell(5.5, 6.5, 3, 3, g); p.ell(14.5, 6.5, 3, 3, g);
+    p.rect(4, 5, 3, 3, '#FFFFFF'); p.rect(13, 5, 3, 3, '#FFFFFF'); p.rect(5, 6 - f, 2, 2, EYE); p.rect(14, 6 - f, 2, 2, EYE);
+    p.rect(7, 11, 6, 1, gd); p.set(6, 10, gd); p.set(13, 10, gd); p.set(4, 12, '#FF8FB1'); p.set(15, 12, '#FF8FB1');
+    p.rect(2, 17, 5, 2, gd); p.rect(13, 17, 5, 2, gd);
+    // a floppy fishing hat
+    p.rect(3, 2, 14, 2, '#C8A26A'); p.rect(6, 0, 8, 2, '#D9B57A'); p.rect(6, 1, 8, 1, '#4D96FF'); p.set(15, 0, '#FF4FA0'); p.set(16, 0, '#FFD23F');
+    return p.outline().canvas();
+  });
+}
+function moleSprite() {
+  return [0, 1].map(f => {
+    const p = new PB(20, 20), b = '#7A5A8A', bd = '#4E3660';
+    p.ell(10, 12.5, 7.5, 6.5, b); p.ell(10, 14.5, 4.5, 3.5, '#B59BC8');
+    p.rect(6, 9, 2, 2, EYE); p.rect(12, 9, 2, 2, EYE); p.ell(10, 12, 2, 1.5, '#FF8FB1'); p.set(9, 11, '#FFFFFF');
+    p.rect(1, 13 - f, 3, 3, '#FFD0B8'); p.rect(16, 13 + f, 3, 3, '#FFD0B8');
+    p.rect(4, 18, 4, 2, bd); p.rect(12, 18, 4, 2, bd);
+    // a miner's hat with a lamp
+    p.ell(10, 5.5, 6.5, 3, '#FFD23F'); p.rect(3, 6, 14, 2, '#E8A800'); p.rect(8, 2, 4, 3, '#FFFFFF'); p.rect(9, 3, 2, 1, '#FFF6A0');
+    return p.outline().canvas();
+  });
+}
+(function () {
+  SQS.oakley = leaflingSprite('#8FD06A', { beard: true, staff: true, leaf: '#FFD23F' });
+  SQS.fern = leaflingSprite('#FF9ACB', { apron: true, glasses: true });
+  SQS.willow = leaflingSprite('#9CC8FF', { bow: true });
+  SQS.leafA = leaflingSprite('#C9A0FF'); SQS.leafB = leaflingSprite('#FFB86B'); SQS.leafC = leaflingSprite('#7FE8E0'); SQS.leafD = leaflingSprite('#FF7A8A', { bow: true });
+  SQS.bud = budSprite(); SQS.fennel = frogSprite(); SQS.digby = moleSprite();
+  // a glow stone, a treasure chest and a lantern
+  const gs = new PB(10, 9); gs.ell(5, 5, 4.4, 3.8, '#7FE8FF'); gs.ell(4, 4, 2, 1.5, '#E8FBFF'); gs.set(6, 6, '#3DF2FF'); SQS.stone = gs.outline().canvas();
+  const ch = (open) => { const p = new PB(18, 16); p.rect(1, 6, 16, 9, '#B5764A'); p.rect(1, 6, 16, 2, '#D9A06A'); p.rect(1, 10, 16, 1, '#7A4A2E');
+    if (open) { p.rect(1, 1, 16, 4, '#7A4A2E'); p.rect(3, 4, 12, 3, '#FFD23F'); p.set(6, 3, '#FFFFFF'); } else { p.rect(1, 2, 16, 5, '#D9A06A'); p.rect(1, 2, 16, 1, '#F0C080'); p.rect(8, 6, 2, 4, '#FFD23F'); }
+    return p.outline().canvas(); };
+  SQS.chest = [ch(false), ch(true)];
+})();
+
+// ---------------------------------------------------------------- talking: walk into someone and they say something (with ! and ? like the towns)
+function sqNpc(o) { return Object.assign({ t: rand(0, 3), hop: 0, line: 0, cool: false, flip: false, moving: false, hx: o.x, hy: o.y, tx: o.x, ty: o.y }, o); }
+function sqUpdateNpcs(dt) {
+  const m = cur;
+  for (const n of sqNpcs) {
+    n.t += dt; n.hop = Math.max(0, n.hop - dt); n.moving = false;
+    if (n.hidden && n.hidden()) continue;
+    if (n.wander) {
+      const d = Math.hypot(n.tx - n.x, n.ty - n.y);
+      if (d < 2) { if (Math.random() < dt * 0.5) { const a = rand(0, 6.28), k = rand(0.3, 1) * n.wander, nx = n.hx + Math.cos(a) * k, ny = n.hy + Math.sin(a) * k * 0.6; if (!hits(m, nx, ny)) { n.tx = nx; n.ty = ny; } } }
+      else { const sp = 16 * dt, sx = (n.tx - n.x) / d * sp, sy = (n.ty - n.y) / d * sp; if (!hits(m, n.x + sx, n.y + sy)) { n.x += sx; n.y += sy; n.flip = sx < 0; n.moving = true; } else { n.tx = n.x; n.ty = n.y; } }
+    }
+    const d = sqTalkD(n.x, n.y);
+    if (n.cool && d > 30) n.cool = false;
+    if (state === 'play' && !n.cool && d < (n.reach || 15)) {
+      n.cool = true; n.hop = 0.35; tone(700 + Math.random() * 300, 0.06, 'square', 0.04); tone(900 + Math.random() * 300, 0.06, 'square', 0.04, null, 0.07);
+      hero.path = []; marker = null;
+      if (n.talk) n.talk(n); else { toast(n.lines[n.line % n.lines.length]); n.line++; }
+      if (state !== 'play') return;
+    }
+  }
+}
+function sqNpcDrawables(list) {
+  for (const n of sqNpcs) {
+    if (n.hidden && n.hidden()) continue;
+    list.push({ y: n.y, d: (cx, cy) => {
+      const fr = SQS[n.spr], img = fr[n.moving ? Math.floor(n.t * 6) % 2 : Math.floor(n.t * 1.2) % 2], hop = n.hop > 0 ? Math.sin(n.hop / 0.35 * Math.PI) * 5 : 0;
+      ctx.globalAlpha = 0.45; ctx.drawImage(shadowSpr, Math.round(n.x - 8 - cx), Math.round(n.y - 3 - cy)); ctx.globalAlpha = 1;
+      const X = Math.round(n.x - img.width / 2 - cx), Y = Math.round(n.y - img.height + 1 - hop - cy);
+      if (n.flip) { ctx.save(); ctx.scale(-1, 1); ctx.drawImage(img, -X - img.width, Y); ctx.restore(); } else ctx.drawImage(img, X, Y);
+      const mk2 = n.mark && n.mark();
+      if (mk2) drawMark(Math.round(n.x - cx), Y - 4 - Math.round(Math.abs(Math.sin(clock * 4)) * 3), mk2[0], mk2[1]);
+      if (n.draw) n.draw(n, cx, cy);
+    } });
+  }
+}
+
+// ---------------------------------------------------------------- prizes, shown the same way as the other quests
+function sqPrize(title, text, rewards) {
+  sqHideUI(); fishing = null;
+  paused = true; state = 'puzzle';
+  const el = $('celebrate');
+  const items = rewards.map(r => r.coins ? `<div class="reward frame"><span class="coin"></span><div><b>+${r.coins}</b>coins</div></div>`
+    : `<div class="reward frame"${r.edge ? ` style="--edge:${r.edge}"` : ''}><img class="px" alt="" src="${r.img}"><div><b>${r.b}</b>${r.t}</div></div>`).join('');
+  el.innerHTML = `<div class="panel"><h2 class="glowtext">${title}</h2>
+    <div class="pics"><img alt="" class="px hop" src="${SPR.heroURL[heroDef.id]}"></div>
+    <p class="endnote">${text}</p><div class="rewards">${items}</div>
+    <div class="btns"><button class="big" id="sqOk" aria-label="Keep going">${ICON_NEXT}</button></div></div>`;
+  el.hidden = false; sfx.win(); if (typeof confetti === 'function') confetti(); if (typeof musicFanfare === 'function') musicFanfare();
+  $('sqOk').addEventListener('click', () => { el.hidden = true; sfx.tap(); paused = false; last = performance.now(); state = 'play'; });
+}
+const SQ_QUESTS = ['fq1_done', 'lant_done', 'soup_done', 'bud_done', 'cave_done'];
+const sqQuestsDone = () => SQ_QUESTS.filter(k => flags[k]).length;
+function sqFurn(id) { if (!furn.includes(id)) { furn.push(id); store.set('furn', furn); } }
+const furnReward = (id) => ({ img: furnImg(id), b: FURN_BY[id].name, t: 'for your house' });
+const runeReward = (id) => ({ img: runeImg(id), b: RUNES[id].name + ' rune', t: 'for your workbench', edge: RUNES[id].col });
+
+// prize furniture for the house
+FURN.push(
+  { id: 'fishtrophy', name: 'Golden fish trophy', price: 0, w: 1, h: 1, free: true, light: '#FFD23F' },
+  { id: 'leaflamp', name: 'Leafling lantern', price: 0, w: 1, h: 1, free: true, light: '#B9FF6B' },
+  { id: 'crystal', name: 'Glow crystal', price: 0, w: 1, h: 1, free: true, light: '#3DF2FF' },
+);
+for (const F of FURN.slice(-3)) FURN_BY[F.id] = F;
+{
+  const _fs = furnSprite;
+  const MINE = {
+    fishtrophy(p, B) { p.rect(1, B - 14, 14, 12, '#8A5A3A'); p.rect(2, B - 13, 12, 10, '#B5764A'); p.ell(7, B - 8, 4.5, 2.6, '#FFD23F'); p.rect(11, B - 10, 2, 5, '#FFB000'); p.set(4, B - 9, EYE); p.set(6, B - 10, '#FFFFFF'); p.rect(5, B - 4, 6, 1, '#FFD23F'); },
+    leaflamp(p, B) { p.rect(7, B - 18, 2, 18, '#8A5A3A'); p.rect(4, B - 2, 8, 2, '#5A3A2E'); p.ell(8, B - 14, 4.5, 4, '#7CFF6B'); p.ell(8, B - 14, 2.5, 2.5, '#F2FFD0'); p.rect(7, B - 20, 2, 2, '#3E8C4A'); p.ell(5, B - 20, 2, 1, '#7CFF6B'); },
+    crystal(p, B) { p.rect(3, B - 3, 10, 3, '#4B4470'); p.rect(6, B - 18, 4, 15, '#7FE8FF'); p.rect(7, B - 20, 2, 2, '#E8FBFF'); p.rect(3, B - 11, 3, 8, '#C9BFFF'); p.rect(10, B - 13, 3, 10, '#3DF2FF'); p.rect(7, B - 16, 1, 10, '#FFFFFF'); },
+  };
+  furnSprite = function (id) {
+    if (!MINE[id]) return _fs(id);
+    if (furnSpr[id]) return furnSpr[id];
+    const F = FURN_BY[id], H = F.h * TS + 16, p = new PB(F.w * TS, H);
+    MINE[id](p, H - 1);
+    return (furnSpr[id] = p.outline().canvas());
+  };
+}
+
+// ---------------------------------------------------------------- fishing: stand by water, tap the fish button, wait for the splash, tap again
+function sqUI() {
+  if ($('fishBtn')) return;
+  const st = document.createElement('style');
+  st.textContent = `
+  #fishBtn { position: fixed; z-index: 5; right: calc(var(--gutter-r) + 210px); bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: 72px; height: 72px; color: var(--cyan); --line: var(--cyan); }
+  #fishBtn svg { width: 40px; height: 40px; filter: drop-shadow(0 0 6px currentColor); }
+  #fishBtn.bite { color: var(--gold); --line: var(--gold); box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--gold), 0 0 24px var(--gold); animation: pulse .5s steps(2) infinite; }
+  #fishChip .fishico { width: 22px; height: 14px; display: inline-block; background: var(--cyan); filter: drop-shadow(0 0 4px var(--cyan));
+    clip-path: polygon(0 50%, 20% 10%, 60% 0, 78% 30%, 100% 0, 100% 100%, 78% 70%, 60% 100%, 20% 90%); }
+  #fishBar { position: fixed; z-index: 6; left: 50%; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); --edge: var(--cyan); padding: 10px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  #fishBar .fbt { position: relative; width: min(300px, 60vw); height: 26px; background: #120B26; box-shadow: inset 0 0 0 3px #2A2050; }
+  #fbZone { position: absolute; top: 3px; bottom: 3px; background: var(--lime); box-shadow: 0 0 10px var(--lime); }
+  #fbMark { position: absolute; top: -6px; width: 8px; height: 38px; margin-left: -4px; background: #fff; box-shadow: 0 0 8px #fff; }
+  #fbText { font: 700 clamp(16px, 3vmin, 22px)/1 var(--pixel); text-align: center; }
+  #fbHits { display: flex; gap: 6px; } #fbHits i { width: 14px; height: 14px; background: #2A2050; } #fbHits i.on { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+  #fishShop .shopbox { --edge: var(--cyan); }
+  #fishShop .fishbook { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 6px; }
+  #fishShop .fishbook img { width: 40px; image-rendering: pixelated; }
+  #fishShop .item img { height: 52px; margin: 16px 0; }
+  #fishShop .sellall { background: var(--lime); }`;
+  document.head.appendChild(st);
+  const b = document.createElement('button'); b.className = 'sq'; b.id = 'fishBtn'; b.hidden = true; b.setAttribute('aria-label', 'Fish');
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2h2v12h-2zM19 2h2v2h-2zM15 14h4v2h-4zM13 16h2v4h-2zM11 20h2v2h-2zM9 18h2v2H9zM3 8h6v2h2v2H9v2H3v-2H1v-2h2zM4 10h1v1H4z" fill="currentColor"/></svg>';
+  document.body.appendChild(b);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); audio(); sqFishTap(); });
+  const chip = document.createElement('div'); chip.className = 'stars coinchip frame'; chip.id = 'fishChip'; chip.hidden = true; chip.setAttribute('aria-label', 'Fish in your bucket');
+  chip.innerHTML = '<span class="fishico"></span><span id="fishN">0</span>';
+  const tr = document.querySelector('.hud.tr'); if (tr) tr.insertBefore(chip, $('soundBtn')); else document.body.appendChild(chip);
+  const bar = document.createElement('div'); bar.id = 'fishBar'; bar.className = 'frame'; bar.hidden = true;
+  bar.innerHTML = '<div class="fbt"><i id="fbZone"></i><b id="fbMark"></b></div><span id="fbText">Tap when the line is in the green!</span><div id="fbHits"></div>';
+  document.body.appendChild(bar);
+  const shop = document.createElement('div'); shop.className = 'layer'; shop.id = 'fishShop'; shop.hidden = true;
+  document.body.appendChild(shop);
+  addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'f' && state === 'play') sqFishTap(); });
+}
+function sqHideUI() { for (const id of ['fishBtn', 'fishBar']) if ($(id)) $(id).hidden = true; }
+{ const _sp = showPick; showPick = function (...a) { const r = _sp(...a); sqHideUI(); if ($('fishChip')) $('fishChip').hidden = true; fishing = null; return r; }; }
+
+function sqWaterSet(m) {
+  if (!m._wset) m._wset = new Set(m.water.map(([x, y]) => x + ',' + y));
+  return m._wset;
+}
+function waterNear() {
+  const m = cur; if (!m || !m.field || m.castle) return null;
+  const ws = sqWaterSet(m), htx = Math.floor(hero.x / TS), hty = Math.floor((hero.y - 4) / TS);
+  let best = null, bd = 1e9;
+  for (let ty = hty - 2; ty <= hty + 2; ty++) for (let tx = htx - 2; tx <= htx + 2; tx++) {
+    if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h || m.solid[ty * m.w + tx] !== 5) continue;
+    const inW = ws.has(tx + ',' + ty), d = Math.hypot(tx * TS + 8 - hero.x, ty * TS + 8 - (hero.y - 4)) + (inW ? 0 : 8);
+    if (d < (inW ? 38 : 30) && d < bd) { bd = d; best = { tx, ty }; }
+  }
+  return best;
+}
+const FISH_CFG = {
+  easy:   { wait: [1.2, 3.2], bite: 2.0, hits: 1 },
+  tricky: { wait: [1.6, 4.6], bite: 0.95, hits: 2 },
+};
+function sqFishTap() {
+  if (state !== 'play' || !hasPole()) return;
+  const C = FISH_CFG[mode] || FISH_CFG.easy;
+  if (!fishing) {
+    const w = waterNear(); if (!w) return;
+    const tx = w.tx * TS + 8 + rand(-3, 3), ty = w.ty * TS + 8 + rand(-2, 3);
+    hero.path = []; marker = null;
+    const dx = tx - hero.x, dy = ty - hero.y;
+    hero.face = Math.abs(dy) > Math.abs(dx) ? (dy < 0 ? 'up' : 'down') : (dx < 0 ? 'sideL' : 'side');
+    fishing = { phase: 'cast', t: 0, bx: tx, by: ty, sx: hero.x, sy: hero.y, wait: rand(...C.wait) * (goldPole() ? 0.6 : 1), hits: 0, miss: 0 };
+    tone(500, 0.18, 'triangle', 0.06, 1200);
+    return;
+  }
+  const F = fishing;
+  if (F.phase === 'bite') {
+    F.fish = pickFish();
+    const rare = FISH[F.fish].val >= 8;
+    if (mode !== 'tricky') { sqCatch(); return; }
+    F.phase = 'reel'; F.t = 0; F.need = rare ? 3 : C.hits; F.zone = rand(0.2, 0.62); F.zw = rare ? 0.2 : 0.28; F.speed = rare ? 3.3 : 2.5;
+    sqFishBar(); tone(880, 0.08, 'square', 0.05); return;
+  }
+  if (F.phase === 'reel') {
+    const p = 0.5 + 0.5 * Math.sin(F.t * F.speed);
+    if (p >= F.zone && p <= F.zone + F.zw) {
+      F.hits++; tone(988 + F.hits * 200, 0.1, 'square', 0.06);
+      if (F.hits >= F.need) { sqCatch(); return; }
+      F.zone = rand(0.05, 0.95 - F.zw); F.speed *= 1.12;
+    } else {
+      F.miss++; sfx.bad();
+      if (F.miss >= 3) { sqLost('The fish wiggled away! Try again!'); return; }
+    }
+    sqFishBar(); return;
+  }
+  // tapping too early just reels the line back in
+  if (F.phase === 'wait' && F.t > 0.4) { fishing = null; tone(300, 0.12, 'triangle', 0.05, 200); }
+}
+function sqFishBar() {
+  const F = fishing, bar = $('fishBar');
+  if (!F || F.phase !== 'reel') { bar.hidden = true; return; }
+  bar.hidden = false;
+  $('fbZone').style.left = `calc(3px + ${F.zone * 100}% - ${F.zone * 6}px)`; $('fbZone').style.width = `calc(${F.zw * 100}% - ${F.zw * 6}px)`;
+  $('fbHits').innerHTML = Array.from({ length: F.need }, (_, i) => `<i class="${i < F.hits ? 'on' : ''}"></i>`).join('');
+}
+function sqLost(text) { fishing = null; $('fishBar').hidden = true; toast(text); }
+function sqCatch() {
+  const F = fishing, id = F.fish, D = FISH[id], isNew = !fishSeen[id];
+  $('fishBar').hidden = true;
+  fishBag[id] = (fishBag[id] || 0) + 1; fishSeen[id] = 1; fishTotal++; sqSaveFish();
+  if (typeof bump === 'function') bump('fish');
+  F.phase = 'caught'; F.t = 0;
+  for (let i = 0; i < 16; i++) { const a = Math.random() * Math.PI * 2, s = rand(20, 60); poofs.push({ x: F.bx, y: F.by, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, life: 0.8, col: i % 2 ? '#BDF4FF' : '#3DF2FF' }); }
+  if (D.junk) { tone(200, 0.2, 'square', 0.06, 140); tone(160, 0.25, 'square', 0.05, 120, 0.15); toast('An old boot! Silly!'); }
+  else { [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.12, 'square', 0.06, null, i * 0.07)); toast(`You caught a ${D.name}!${isNew ? ' New fish!' : ''}`); }
+  if (id === 'golden') poof(hero.x, hero.y - 30, '#FFD23F');
+}
+function sqUpdateFishing(dt) {
+  const btn = $('fishBtn'); if (!btn) return;
+  const F = fishing;
+  if (F && (state !== 'play' || hero.moving || cur.castle)) { if (F.phase !== 'caught' || hero.moving) { fishing = null; $('fishBar').hidden = true; } }
+  const can = state === 'play' && hasPole() && (fishing || waterNear());
+  btn.hidden = !can;
+  btn.classList.toggle('bite', !!(fishing && (fishing.phase === 'bite' || fishing.phase === 'reel')));
+  $('fishChip').hidden = !(hasPole() && heroDef && state !== 'pick');
+  $('fishN').textContent = fishCount();
+  if (!fishing) return;
+  F.t += dt;
+  if (F.phase === 'cast' && F.t > 0.4) { F.phase = 'wait'; F.t = 0; tone(260, 0.12, 'triangle', 0.06, 180); }
+  else if (F.phase === 'wait' && F.t > F.wait) { F.phase = 'bite'; F.t = 0; tone(1200, 0.08, 'square', 0.06); tone(1500, 0.1, 'square', 0.06, null, 0.08); for (let i = 0; i < 8; i++) poofs.push({ x: F.bx + rand(-4, 4), y: F.by, vx: rand(-20, 20), vy: rand(-50, -20), life: 0.6, col: '#BDF4FF' }); }
+  else if (F.phase === 'bite' && F.t > (FISH_CFG[mode] || FISH_CFG.easy).bite) { F.phase = 'wait'; F.t = 0; F.wait = rand(1, 2.4); F.missed = (F.missed || 0) + 1; toast(F.missed >= 2 ? 'Tap the fish button when you see the splash!' : 'Too slow! The fish is still there...'); }
+  else if (F.phase === 'reel') { const p = 0.5 + 0.5 * Math.sin(F.t * F.speed); $('fbMark').style.left = `calc(3px + ${p * 100}% - ${p * 6}px)`; if (F.t > 9) sqLost('The fish got tired of waiting!'); }
+  else if (F.phase === 'caught' && F.t > 1.6) fishing = null;
+}
+function rodTip() {
+  const f = hero.face;
+  return f === 'side' ? [hero.x + 16, hero.y - 27] : f === 'sideL' ? [hero.x - 16, hero.y - 27] : f === 'up' ? [hero.x + 7, hero.y - 34] : [hero.x + 9, hero.y - 26];
+}
+function sqFishDrawables(list) {
+  const F = fishing; if (!F) return;
+  list.push({ y: hero.y + 0.5, d: (cx, cy) => {
+    const [tx, ty] = rodTip(), hx = hero.x + (hero.face === 'sideL' ? -4 : 4), hy = hero.y - 12;
+    // the rod
+    const n = 10; for (let i = 0; i <= n; i++) { ctx.fillStyle = i < 3 ? '#7A4A2E' : goldPole() ? '#FFD23F' : '#C8A26A'; ctx.fillRect(Math.round(hx + (tx - hx) * i / n - cx), Math.round(hy + (ty - hy) * i / n - cy), 1, 1); }
+    if (F.phase === 'caught') { // show off the fish
+      const k = Math.min(1, F.t / 0.35), img = fishSprite(F.fish);
+      const x = F.bx + (hero.x - F.bx) * k, y = F.by + (hero.y - 46 - F.by) * k - Math.sin(k * Math.PI) * 26;
+      ctx.drawImage(img, Math.round(x - img.width / 2 - cx), Math.round(y - cy + (k >= 1 ? Math.sin(clock * 6) * 1.5 : 0)));
+      return;
+    }
+    let bx = F.bx, by = F.by;
+    if (F.phase === 'cast') { const k = Math.min(1, F.t / 0.4); bx = tx + (F.bx - tx) * k; by = ty + (F.by - ty) * k - Math.sin(k * Math.PI) * 20; }
+    else if (F.phase === 'wait') by += Math.sin(clock * 3) * 0.8;
+    else if (F.phase === 'bite' || F.phase === 'reel') by += 2 + Math.round(Math.sin(clock * 22) * 1.5);
+    // the line, sagging a little
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    const m = 14; for (let i = 1; i < m; i++) { const k = i / m; ctx.fillRect(Math.round(tx + (bx - tx) * k - cx), Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * 5 - cy), 1, 1); }
+    // the bobber
+    ctx.fillStyle = OUT; ctx.fillRect(Math.round(bx - 2 - cx), Math.round(by - 3 - cy), 5, 5);
+    ctx.fillStyle = '#FF4F5A'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by - 2 - cy), 3, 2);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by - cy), 3, 1);
+    if (F.phase !== 'cast') { // ripples
+      const r = 3 + ((clock * 6) % 5); ctx.fillStyle = 'rgba(189,244,255,.6)';
+      ctx.fillRect(Math.round(bx - r - cx), Math.round(by + 2 - cy), 2, 1); ctx.fillRect(Math.round(bx + r - 1 - cx), Math.round(by + 2 - cy), 2, 1);
+    }
+    if (F.phase === 'bite' || F.phase === 'reel') drawMark(Math.round(hero.x - cx), Math.round(hero.y - 34 - cy - Math.abs(Math.sin(clock * 8)) * 3), '!', '#FFD23F');
+  } });
+}
+
+// ---------------------------------------------------------------- Fennel's fish market and fish book
+function sqMarket() {
+  state = 'shop'; paused = true; hero.path = []; marker = null; touch = null; $('stick').hidden = true; sqHideUI();
+  tone(660, 0.1, 'square', 0.05); tone(990, 0.12, 'square', 0.05, null, 0.08);
+  sqDrawMarket(); $('fishShop').hidden = false;
+}
+function sqDrawMarket() {
+  const el = $('fishShop'), have = Object.keys(FISH).filter(id => fishBag[id] > 0), worth = have.reduce((a, id) => a + FISH[id].val * fishBag[id], 0);
+  const seen = FISH_BOOK.filter(id => fishSeen[id]).length;
+  el.innerHTML = `<div class="shopbox frame"><div class="shophead"><div><h2>Fennel's Fish Market</h2><p>${have.length ? 'Fennel buys every fish you catch!' : 'Your bucket is empty. Go catch some fish!'}</p></div>
+    <div class="stars coinchip frame"><span class="coin"></span><span>${coins}</span></div>
+    <button class="sq" id="fishClose" aria-label="Leave the market"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v2h2v2h4V6h2V4h4v4h-2v2h-2v4h2v2h2v4h-4v-2h-2v-2h-4v2H8v2H4v-4h2v-2h2v-4H6V8H4z" fill="currentColor"/></svg></button></div>
+    <div class="items" id="fishItems"></div>
+    <p style="margin:0;text-align:center;font:600 16px/1.2 var(--pixel);color:var(--muted)">Fish book: ${seen} of ${FISH_BOOK.length} kinds${fishSeen.golden ? ' + the Golden Gill!' : ''}</p>
+    <div class="fishbook">${FISH_BOOK.concat(['golden']).map(id => `<img alt="${fishSeen[id] ? FISH[id].name : 'Not caught yet'}" title="${fishSeen[id] ? FISH[id].name : 'Look in ' + FISH_WHERE[id]}" src="${fishSeen[id] ? fishImg(id) : fishShadowImg(id)}">`).join('')}</div></div>`;
+  const g = $('fishItems');
+  if (have.length > 1) {
+    const card = document.createElement('div'); card.className = 'item frame on';
+    card.innerHTML = `<img class="px" alt="" src="${fishImg(have[0])}"><div class="iname">Sell them all<small>${fishCount()} fish</small></div><button class="ibtn sellall" aria-label="Sell all your fish for ${worth} coins"><span class="coin"></span>+${worth}</button>`;
+    card.querySelector('button').addEventListener('click', () => { for (const id of have) fishBag[id] = 0; sqSaveFish(); sqCoins(worth); sqSold(worth); sqDrawMarket(); });
+    g.appendChild(card);
+  }
+  for (const id of have) {
+    const D = FISH[id], card = document.createElement('div'); card.className = 'item frame' + (D.val >= 8 ? ' rare' : '');
+    card.innerHTML = `<img class="px" alt="" src="${fishImg(id)}"><div class="iname">${D.name}<small>you have ${fishBag[id]}</small></div><button class="ibtn" aria-label="Sell one ${D.name} for ${D.val} coins"><span class="coin"></span>+${D.val}</button>`;
+    card.querySelector('button').addEventListener('click', () => { fishBag[id]--; sqSaveFish(); sqCoins(D.val); sqSold(D.val); sqDrawMarket(); });
+    g.appendChild(card);
+  }
+  $('fishClose').addEventListener('click', sqCloseMarket);
+}
+function sqSold(n) { [1320, 1760, 2093].forEach((f, i) => tone(f, 0.08, 'square', 0.05, null, i * 0.06)); }
+function sqCloseMarket() { $('fishShop').hidden = true; paused = false; last = performance.now(); state = 'play'; sfx.tap(); }
+function fennelTalk(n) {
+  if (!hasPole()) {
+    setFlag('pole'); sfx.win();
+    toast('Fennel: Ribbit! Want to go fishing? Take my spare fishing pole! Stand by the water and tap the fish button.');
+    return;
+  }
+  if (!flags.fq1_done) {
+    if (fishTotal >= 3) {
+      setFlag('fq1_done'); sqCoins(20);
+      sqPrize('Fishing Buddy!', 'You caught 3 fish! Fennel says you are a <b class="rb">real fisher</b> now. Sell your fish to him any time.', [{ coins: 20 }, { img: fishImg('perch'), b: 'Fish book', t: `catch all ${FISH_BOOK.length} kinds` }]);
+      return;
+    }
+    if (!fishCount()) { toast(`Fennel: Catch 3 fish and come show me! You have caught ${fishTotal}. Ponds, lakes and streams are full of them!`); return; }
+  }
+  if (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) {
+    setFlag('fish_book'); sqCoins(100); sqFurn('fishtrophy');
+    sqPrize('Master Fisher!', 'You caught <b class="rb">every kind of fish</b>! Fennel gives you his golden fishing pole. Fish bite faster with it!', [{ coins: 100 }, furnReward('fishtrophy'), { img: fishImg('golden'), b: 'Golden pole', t: 'faster bites, rarer fish' }]);
+    return;
+  }
+  sqMarket();
+}
+
+// ---------------------------------------------------------------- Rainbow Town: the Great Tree with a hidden ladder, and Fennel's dock on the stream
+const GTREE = { tx: 24, ladderY: 6, bushes: [[23, 6], [25, 6], [24, 7]] };
+let ladderCool = false;
+function sqTown(m) {
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(91);
+  // clear the space
+  const inZone = (tx, ty) => tx >= 22 && tx <= 26 && ty >= 2 && ty <= 8 || tx >= 28 && tx <= 33 && ty >= 24 && ty <= 26;
+  m.bushes = m.bushes.filter(b => { if (inZone(b.tx, b.ty)) { setSolid(m, b.tx, b.ty, 0); return false; } return true; });
+  for (const g of m.gemSpots || []) if (inZone(g.tx, g.ty)) { g.tx = 24; g.ty = 10; }
+  // the trunk, with big roots
+  const X0 = 23 * TS, X1 = 26 * TS, Y0 = 1 * TS, Y1 = 6 * TS;
+  pell(c, 24.5 * TS, Y1, 34, 6, 'rgba(10,6,24,.5)');
+  px(c, X0 - 1, Y0, X1 - X0 + 2, Y1 - Y0, OUT); px(c, X0, Y0, X1 - X0, Y1 - Y0, '#5A3A3A'); px(c, X1 - 12, Y0, 12, Y1 - Y0, '#43282E');
+  for (let i = 0; i < 9; i++) px(c, X0 + 3 + ((r() * 40) | 0), Y0 + ((r() * 70) | 0), 1, 6 + ((r() * 8) | 0), '#3A2433');
+  for (const [dx, w] of [[-12, 12], [-6, 8], [44, 10], [52, 8]]) { px(c, X0 + dx - 1, Y1 - 7, w + 2, 8, OUT); px(c, X0 + dx, Y1 - 6, w, 6, '#5A3A3A'); px(c, X0 + dx, Y1 - 6, w, 1, '#7A5240'); }
+  for (let i = 0; i < 10; i++) px(c, X0 + ((r() * 48) | 0), Y0 + 20 + ((r() * 50) | 0), 3, 2, '#3E8C4A');
+  // a rope ladder with glowing rungs
+  const lx = 24 * TS + 3;
+  px(c, lx, Y0 + 4, 1, Y1 - Y0 + 8, '#C8A26A'); px(c, lx + 9, Y0 + 4, 1, Y1 - Y0 + 8, '#C8A26A');
+  for (let y = Y0 + 8; y < Y1 + 10; y += 6) { px(c, lx, y, 10, 2, '#8A5A3A'); px(c, lx + 1, y, 8, 1, '#D9A06A'); }
+  m.lights.push({ x: lx + 5, y: Y1 + 2, r: 16, col: '#B9FF6B', a: 0.35, fl: 1 });
+  for (let x = lx - 1; x < lx + 12; x++) setSolid(m, Math.floor(x / TS), 5);
+  for (let ty = 2; ty <= 5; ty++) for (let tx = 23; tx <= 25; tx++) setSolid(m, tx, ty);
+  // the canopy covers the village way up high (above everybody)
+  const cx0 = 24.5 * TS, cy0 = 1.4 * TS;
+  pell(f, cx0, cy0, 56, 30, OUT); pell(f, cx0, cy0, 55, 29, '#123E36'); pell(f, cx0 - 6, cy0 - 4, 44, 21, '#1A5A47'); pell(f, cx0 - 12, cy0 - 9, 26, 12, '#2A7A5A');
+  for (let i = 0; i < 30; i++) px(f, cx0 - 48 + ((r() * 96) | 0), cy0 - 22 + ((r() * 40) | 0), 2, 1, r() < 0.5 ? '#3BA07C' : '#5BC46A');
+  // a tiny round window peeking out of the leaves: somebody lives up there!
+  px(f, cx0 + 22, cy0 + 2, 8, 8, OUT); px(f, cx0 + 23, cy0 + 3, 6, 6, '#FFC870'); px(f, cx0 + 25, cy0 + 3, 1, 6, OUT); px(f, cx0 + 23, cy0 + 5, 6, 1, OUT);
+  m.lights.push({ x: cx0 + 26, y: cy0 + 6, r: 18, col: '#FFC870', a: 0.5, fl: 1 });
+  for (let i = 0; i < 6; i++) m.lights.push({ x: cx0 - 40 + i * 16, y: cy0 + 22 + (i % 2) * 4, r: 8, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.6, fl: 2 });
+  // sparkly bushes hide the bottom of the ladder until you find the village
+  if (!flags.village_found) for (const [tx, ty] of GTREE.bushes) { m.bushes.push({ tx, ty, alive: true, secret: true, t: 0 }); setSolid(m, tx, ty, 2); }
+  m.entries.village = { x: 24 * TS + 8, y: 7 * TS + 10, face: 'down' };
+  // Fennel's little dock on the stream
+  const dx = 30 * TS, dy = 26 * TS;
+  px(c, dx - 1, dy - 3, 2 * TS + 2, TS + 4, OUT); px(c, dx, dy - 2, 2 * TS, TS + 2, '#8A6A50');
+  for (let k = 0; k < 2 * TS; k += 4) px(c, dx + k, dy - 2, 1, TS + 2, '#6B4A3A');
+  px(c, dx, dy + TS - 1, 2 * TS, 2, '#4A3028'); px(c, dx + 1, dy + TS, 3, 6, '#4A3028'); px(c, dx + 2 * TS - 4, dy + TS, 3, 6, '#4A3028');
+  for (const tx of [30, 31]) { setSolid(m, tx, 26, 0); }
+  m.water = m.water.filter(([x, y]) => !(y === 26 && (x === 30 || x === 31))); m._wset = null;
+  // a bucket and a sign with a fish on it
+  px(c, 32 * TS + 3, 25 * TS + 4, 9, 9, OUT); px(c, 32 * TS + 4, 25 * TS + 5, 7, 7, '#5FA8E8'); px(c, 32 * TS + 4, 25 * TS + 5, 7, 2, '#BDF4FF');
+  px(c, 28 * TS + 10, 24 * TS + 6, 2, 12, '#6B4A3A'); px(c, 28 * TS + 4, 24 * TS, 14, 8, OUT); px(c, 28 * TS + 5, 24 * TS + 1, 12, 6, '#D9B57A');
+  px(c, 28 * TS + 7, 24 * TS + 3, 6, 2, '#3FA9E0'); px(c, 28 * TS + 13, 24 * TS + 2, 2, 4, '#3FA9E0');
+  m.fennel = { x: 29 * TS + 8, y: 25 * TS + 12 };
+}
+{ const _bo = buildOverworld; buildOverworld = function (...a) { const m = _bo(...a); try { sqTown(m); } catch (e) { console.error(e); } return m; }; }
+function fennelDraw(n, cx, cy) { // his own line in the water
+  const tx = n.x + 9, ty = n.y - 16, bx = n.x + 6, by = 26 * TS + 10 + Math.sin(clock * 2.5);
+  ctx.fillStyle = '#C8A26A'; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(n.x + 5 + i * 0.8 - cx), Math.round(n.y - 8 - i * 1.4 - cy), 1, 1);
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 1; i < 8; i++) ctx.fillRect(Math.round(tx + (bx - tx) * i / 8 - cx), Math.round(ty + (by - ty) * i / 8 - cy), 1, 1);
+  ctx.fillStyle = '#FF4F5A'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by - 1 - cy), 3, 2); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(Math.round(bx - 1 - cx), Math.round(by + 1 - cy), 3, 1);
+}
+
+// ---------------------------------------------------------------- Treetop Village, way up in the leaves
+const VDECKS = [
+  { id: 'A', cx: 20, cy: 20 }, { id: 'B', cx: 8, cy: 20, hut: '#8FD06A' }, { id: 'C', cx: 32, cy: 20, hut: '#FF9ACB' },
+  { id: 'D', cx: 20, cy: 8 }, { id: 'E', cx: 8, cy: 8 }, { id: 'F', cx: 32, cy: 8, hut: '#9CC8FF' },
+];
+const VBRIDGES = [[12, 19, 15, 20], [24, 19, 27, 20], [12, 7, 15, 8], [24, 7, 27, 8], [19, 10, 20, 17], [7, 10, 8, 17], [31, 10, 32, 17]];
+const LANTERNS = [[5, 9], [16, 9], [35, 9], [35, 21], [23, 21], [5, 21]]; // red, orange, yellow, green, blue, purple
+const DRX = 4.6, DRY = 3.2;
+const onDeck = (tx, ty) => VDECKS.some(d => ((tx + 0.5 - d.cx) / DRX) ** 2 + ((ty + 0.5 - d.cy) / DRY) ** 2 <= 1);
+const lantLit = (i) => !!flags['lant_' + i] || !!flags.lant_done;
+let lantNext = 0;
+function buildVillage() {
+  const W = 40, H = 26, m = newMap(W, H, 'land');
+  Object.assign(m, { field: true, calm: true, noRespawn: true, ff: true, landId: 'village', dusk: '#A99BDD', name: 'Treetop Village', music: 'treetop', sqFlag: 'village_found' });
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(131);
+  // far, far below: the forest floor in the dark
+  px(c, 0, 0, W * TS, H * TS, '#0B1F24');
+  for (let i = 0; i < 160; i++) pell(c, r() * W * TS, r() * H * TS, 10 + r() * 30, 6 + r() * 14, r() < 0.5 ? '#0F2A2E' : '#0A1A20');
+  for (let i = 0; i < 90; i++) { const x = r() * W * TS, y = r() * H * TS; px(c, x | 0, y | 0, 1, 1, r() < 0.5 ? '#3DF2FF' : '#B9FF6B'); if (i % 3 === 0) m.lights.push({ x, y, r: 5, col: '#B9FF6B', a: 0.4, fl: 2 }); }
+  // the giant trunks rise up from below
+  for (const d of VDECKS) {
+    const x = d.cx * TS, w = 44;
+    px(c, x - w / 2 - 1, 0, w + 2, H * TS, '#0A0618'); px(c, x - w / 2, 0, w, H * TS, '#3A2433'); px(c, x + w / 2 - 14, 0, 14, H * TS, '#2A1826');
+    for (let i = 0; i < 26; i++) px(c, x - w / 2 + 3 + ((r() * (w - 6)) | 0), (r() * H * TS) | 0, 1, 8 + ((r() * 14) | 0), '#2A1826');
+    for (let i = 0; i < 6; i++) { const y = (r() * H * TS) | 0; px(c, x - w / 2 + ((r() * w) | 0), y, 3, 2, '#2F7C6B'); }
+  }
+  // walkable: the decks, the rope bridges and the ladder hole; everything else is a long way down
+  for (let i = 0; i < m.solid.length; i++) m.solid[i] = 1;
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) if (onDeck(tx, ty)) setSolid(m, tx, ty, 0);
+  for (const [x0, y0, x1, y1] of VBRIDGES) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) setSolid(m, x, y, 0);
+  setSolid(m, 19, 23, 0); setSolid(m, 20, 23, 0);
+  // rope bridges
+  for (const [x0, y0, x1, y1] of VBRIDGES) {
+    const X0 = x0 * TS, Y0 = y0 * TS, X1 = (x1 + 1) * TS, Y1 = (y1 + 1) * TS, horiz = x1 - x0 > y1 - y0;
+    pell(c, (X0 + X1) / 2, Y1 + 8, (X1 - X0) / 2, 4, 'rgba(0,0,0,.35)');
+    px(c, X0, Y0, X1 - X0, Y1 - Y0, '#1A0F1E');
+    if (horiz) for (let x = X0; x < X1; x += 5) { px(c, x, Y0 + 1, 4, Y1 - Y0 - 2, '#B5835A'); px(c, x, Y0 + 1, 4, 1, '#D9A06A'); px(c, x + 3, Y0 + 1, 1, Y1 - Y0 - 2, '#8A5A3A'); }
+    else for (let y = Y0; y < Y1; y += 5) { px(c, X0 + 1, y, X1 - X0 - 2, 4, '#B5835A'); px(c, X0 + 1, y, X1 - X0 - 2, 1, '#D9A06A'); px(c, X0 + 1, y + 3, X1 - X0 - 2, 1, '#8A5A3A'); }
+    // rope rails
+    if (horiz) for (const y of [Y0 - 3, Y1 + 1]) { px(c, X0, y, X1 - X0, 1, '#E8D49A'); for (let x = X0; x < X1; x += 8) px(c, x, y, 1, 4, '#C8A26A'); }
+    else for (const x of [X0 - 3, X1 + 2]) { px(c, x, Y0, 1, Y1 - Y0, '#E8D49A'); for (let y = Y0; y < Y1; y += 8) px(c, x, y, 3, 1, '#C8A26A'); }
+  }
+  // round wooden decks with a rope railing
+  for (const d of VDECKS) {
+    const X = (d.cx) * TS, Y = (d.cy) * TS, RX = DRX * TS, RY = DRY * TS;
+    pell(c, X, Y + 10, RX + 2, RY, 'rgba(0,0,0,.4)');
+    pell(c, X, Y + 4, RX + 3, RY + 3, '#5A3A2E'); pell(c, X, Y, RX + 2, RY + 2, OUT); pell(c, X, Y, RX + 1, RY + 1, '#9A6A45');
+    for (let yy = -RY; yy <= RY; yy += 5) { const hw = Math.sqrt(Math.max(0, 1 - (yy / (RY + 1)) ** 2)) * (RX + 1); px(c, Math.round(X - hw), Math.round(Y + yy), Math.round(hw * 2), 1, '#7A4A2E'); }
+    for (let i = 0; i < 20; i++) px(c, Math.round(X - RX + r() * RX * 2), Math.round(Y - RY + 4 + r() * (RY * 2 - 8)), 2, 1, '#B5835A');
+    for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, x = X + Math.cos(a) * (RX + 1), y = Y + Math.sin(a) * (RY + 1);
+      if (VBRIDGES.some(([x0, y0, x1, y1]) => x >= x0 * TS - 6 && x <= (x1 + 1) * TS + 6 && y >= y0 * TS - 6 && y <= (y1 + 1) * TS + 6) || (d.id === 'A' && Math.abs(x - X) < 18 && y > Y)) continue;
+      px(c, Math.round(x), Math.round(y) - 5, 2, 6, '#5A3A2E'); px(c, Math.round(x), Math.round(y) - 5, 2, 1, '#E8D49A'); }
+  }
+  // the ladder hole down to town
+  px(c, 19 * TS + 1, 22 * TS + 6, 2 * TS - 2, TS + 6, OUT); px(c, 19 * TS + 3, 22 * TS + 8, 2 * TS - 6, TS + 4, '#0A0618');
+  for (let y = 22 * TS + 9; y < 24 * TS; y += 5) px(c, 19 * TS + 6, y, 2 * TS - 12, 2, '#8A5A3A');
+  m.lights.push({ x: 20 * TS, y: 23 * TS, r: 14, col: '#B9FF6B', a: 0.4, fl: 1 });
+  // little round huts around the trunks, with glowing windows
+  for (const d of VDECKS) if (d.hut) {
+    const X = d.cx * TS, Y = (d.cy - 1) * TS + 2, col = d.hut;
+    pell(c, X, Y + 2, 30, 6, 'rgba(10,6,24,.5)');
+    pell(c, X, Y - 12, 28, 18, OUT); pell(c, X, Y - 12, 27, 17, '#8A5A3A'); pell(c, X + 6, Y - 10, 18, 13, '#6B4636');
+    for (let k = -24; k < 26; k += 6) px(c, X + k, Y - 26, 1, 26, '#5A3A2E');
+    px(c, X - 7, Y - 18, 14, 18, OUT); px(c, X - 6, Y - 17, 12, 17, '#2A1826'); px(c, X - 6, Y - 17, 12, 2, col); px(c, X + 3, Y - 9, 2, 2, '#FFD23F');
+    for (const wx of [X - 20, X + 13]) { px(c, wx - 1, Y - 17, 9, 8, OUT); px(c, wx, Y - 16, 7, 6, '#FFC870'); px(c, wx + 3, Y - 16, 1, 6, OUT); m.lights.push({ x: wx + 3, y: Y - 13, r: 18, col: '#FFC870', a: 0.5, fl: 1 }); }
+    // leafy roof over everybody
+    pell(f, X, Y - 32, 34, 16, OUT); pell(f, X, Y - 32, 33, 15, mixHex(col, '#1A5A47', 0.55)); pell(f, X - 6, Y - 36, 22, 9, mixHex(col, '#2A7A5A', 0.35)); pell(f, X - 9, Y - 39, 10, 4, col);
+    px(f, X - 1, Y - 52, 2, 6, '#3E8C4A'); pell(f, X - 5, Y - 50, 4, 2, '#7CFF6B'); pell(f, X + 5, Y - 51, 4, 2, '#5BC46A');
+    for (let ty = d.cy - 3; ty <= d.cy - 2; ty++) for (let tx = d.cx - 2; tx <= d.cx + 1; tx++) setSolid(m, tx, ty);
+  }
+  // deck D: the big moon bell hanging from a branch
+  { const X = 20 * TS, Y = 6 * TS;
+    px(c, X - 30, Y - 22, 60, 4, '#5A3A2E'); px(c, X - 30, Y - 22, 60, 1, '#8A5A3A'); px(c, X - 1, Y - 18, 2, 6, '#E8D49A');
+    m.bell = { x: X, y: Y + 6, ring: 0 };
+    setSolid(m, 19, 5); setSolid(m, 20, 5); }
+  // deck E: a lookout with a telescope and a treasure chest
+  m.chest = { x: 9 * TS, y: 6 * TS + 14, flag: 'v_chest' }; setSolid(m, 8, 6); setSolid(m, 9, 6);
+  { const X = 5 * TS + 8, Y = 7 * TS + 6; px(c, X - 1, Y - 6, 2, 8, '#5A3A2E'); px(c, X - 3, Y - 12, 10, 4, OUT); px(c, X - 2, Y - 11, 8, 2, '#FFD23F'); px(c, X + 5, Y - 12, 2, 4, '#7FD6F5'); setSolid(m, 5, 7); }
+  // deck C: Grandma Fern's soup pot, steaming
+  { const X = 35 * TS + 2, Y = 19 * TS + 14; px(c, X - 6, Y - 9, 13, 9, OUT); px(c, X - 5, Y - 8, 11, 8, '#4B4470'); px(c, X - 5, Y - 8, 11, 2, '#FF9F1C'); px(c, X - 3, Y, 2, 2, '#FF6A2E'); px(c, X + 1, Y, 2, 2, '#FFD23F');
+    m.lights.push({ x: X, y: Y, r: 16, col: '#FF7A3A', a: 0.5, fl: 2 }); m.pot = { x: X, y: Y - 10 }; setSolid(m, 35, 19); }
+  // the six lanterns on posts
+  m.lanterns = LANTERNS.map(([tx, ty], i) => { setSolid(m, tx, ty); const x = tx * TS + 8, y = ty * TS + 14; px(c, x - 1, y - 16, 2, 16, '#5A3A2E'); px(c, x - 4, y - 2, 8, 2, '#5A3A2E'); return { i, x, y, col: RAINBOW[i] }; });
+  // the canopy: big leaves above everybody, with hanging vines
+  for (let x = -20; x < W * TS + 40; x += 34) {
+    const y = 8 + ((x * 7) % 13);
+    pell(f, x, y, 34, 24, OUT); pell(f, x, y, 33, 23, '#123E36'); pell(f, x - 4, y - 3, 24, 15, '#1A5A47'); pell(f, x - 8, y - 7, 12, 7, '#2A7A5A');
+  }
+  for (let i = 0; i < 26; i++) { const x = (r() * W * TS) | 0, len = 14 + ((r() * 30) | 0); px(f, x, 18, 1, len, '#2F7C6B'); px(f, x - 1, 18 + len, 3, 3, i % 2 ? '#B9FF6B' : '#FF9ACB'); m.lights.push({ x, y: 19 + len, r: 8, col: i % 2 ? '#B9FF6B' : '#FF9ACB', a: 0.6, fl: 1 }); }
+  // string lights between the decks
+  for (const [x0, y0, x1, y1] of VBRIDGES) { const horiz = x1 - x0 > y1 - y0; for (let k = 0; k < 4; k++) { const t = (k + 0.5) / 4, x = horiz ? (x0 + (x1 + 1 - x0) * t) * TS : (x0 - 0.3) * TS, y = horiz ? y0 * TS - 4 : (y0 + (y1 + 1 - y0) * t) * TS; m.lights.push({ x, y, r: 7, col: RAINBOW[(k + x0) % 6], a: 0.6, fl: 1 }); } }
+  m.flowers = []; m.water = [];
+  m.bushes = []; m.obs = []; m.runes = []; m.switches = []; m.castles = []; m.champ = null; m.spawns = []; m.gemSpots = [];
+  m.exits = [{ test: h => h.y > 23 * TS + 4, to: 'town', entry: 'village' }];
+  m.entries = { town: { x: 20 * TS, y: 22 * TS, face: 'up' } };
+  return m;
+}
+function villageNpcs() {
+  const easy = mode !== 'tricky';
+  return [
+    sqNpc({ spr: 'oakley', x: 8 * TS, y: 21 * TS, reach: 16,
+      mark: () => flags.lant_done ? null : flags.lant_asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'],
+      talk() {
+        if (flags.lant_done) { toast('Elder Oakley: Our lanterns glow so bright! The ghosts will never find us now.'); return; }
+        const k = LANTERNS.filter((_, i) => lantLit(i)).length;
+        if (!flags.lant_asked) { setFlag('lant_asked'); toast(easy ? 'Elder Oakley: Welcome, little hero! The ghosts blew out our 6 lanterns. Walk up to each one to light it!' : 'Elder Oakley: The ghosts blew out our 6 lanterns! Light them in rainbow order: red, orange, yellow, green, blue, then purple!'); return; }
+        toast(`Elder Oakley: You lit ${k} of 6 lanterns.` + (easy ? ' Look on every deck!' : ` Next is ${['red', 'orange', 'yellow', 'green', 'blue', 'purple'][lantNext]}.`));
+      } }),
+    sqNpc({ spr: 'fern', x: 32 * TS, y: 21 * TS, reach: 16,
+      mark: () => flags.soup_done ? null : soupReady() ? ['!', '#7CFF6B'] : flags.soup_asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'],
+      talk() {
+        if (flags.soup_done) { toast(pick(['Grandma Fern: Mmm, fish soup! Come back for a bowl any time.', 'Grandma Fern: Thank you, dear. Now the whole village is cozy and full.'])); hero.hp = hero.maxHp; drawHearts(); return; }
+        if (soupReady()) {
+          // take the fish, cheapest first
+          let need = 3; const kinds = Object.keys(FISH).filter(id => fishBag[id] > 0 && !FISH[id].junk).sort((a, b) => FISH[a].val - FISH[b].val);
+          for (const id of kinds) { const n = easy ? Math.min(need, fishBag[id]) : 1; fishBag[id] -= n; need -= n; if (need <= 0) break; }
+          sqSaveFish(); setFlag('soup_done'); sqCoins(25); gotRune('lucky', true); hero.hp = hero.maxHp; drawHearts();
+          sqPrize('Soup\'s On!', 'Grandma Fern made her famous <b class="rb">fish soup</b> for the whole village. Yum!', [{ coins: 25 }, runeReward('lucky')]);
+          return;
+        }
+        setFlag('soup_asked');
+        toast(!hasPole() ? 'Grandma Fern: I want to make fish soup, but I have no fish! Fennel the frog by the town stream has a fishing pole for you.'
+          : easy ? 'Grandma Fern: Can you bring me 3 fish for my soup? Any kind will do!' : 'Grandma Fern: Can you bring me 3 different kinds of fish for my special soup?');
+      } }),
+    sqNpc({ spr: 'willow', x: 32 * TS, y: 9 * TS, reach: 16,
+      mark: () => flags.bud_done ? null : flags.bud_found ? ['!', '#7CFF6B'] : flags.bud_asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'],
+      talk() {
+        if (flags.bud_done) { toast('Willow: Bud tells everybody about the waterfall now. Thank you!'); return; }
+        if (flags.bud_found) {
+          setFlag('bud_done'); sqCoins(30); gotRune('swift', true);
+          sqPrize('Bud is Home!', 'You found little <b class="rb">Bud</b> at the hidden waterfall. Willow is so happy!', [{ coins: 30 }, runeReward('swift')]);
+          return;
+        }
+        setFlag('bud_asked');
+        toast('Willow: My little Bud went to look for a waterfall in Whisper Woods, and he is not home yet! Can you find him? Look past the sparkly bushes on the east side.');
+      } }),
+    sqNpc({ spr: 'bud', x: 34 * TS + 4, y: 9 * TS + 6, wander: 14, hidden: () => !flags.bud_found, lines: ['Bud: The waterfall was SO big! And there is a cave behind it!', 'Bud: You are my hero!'] }),
+    sqNpc({ spr: 'leafA', x: 17 * TS, y: 21 * TS, wander: 24, lines: ['Welcome to Treetop Village! Shh, the ghosts don\'t know we live up here.', 'You climbed all the way up! Wow!'] }),
+    sqNpc({ spr: 'leafB', x: 22 * TS, y: 9 * TS, wander: 26, lines: ['Ring the big moon bell! Ding dong!', 'We Leaflings love fireflies, stories and blueberry pie.'] }),
+    sqNpc({ spr: 'leafC', x: 10 * TS, y: 9 * TS, wander: 18, lines: ['From up here you can see your house!', 'Psst! There is treasure in the chest on this lookout.'] }),
+    sqNpc({ spr: 'leafD', x: 6 * TS, y: 21 * TS, wander: 16, lines: ['Grandma Fern makes the best fish soup in the whole forest.', 'Did you know? A cave hides behind a waterfall. Spooky... but sparkly!'] }),
+  ];
+}
+function soupReady() {
+  const kinds = Object.keys(FISH).filter(id => fishBag[id] > 0 && !FISH[id].junk);
+  return mode === 'tricky' ? kinds.length >= 3 : kinds.reduce((a, id) => a + fishBag[id], 0) >= 3;
+}
+function lightLantern(L) {
+  if (lantLit(L.i)) return;
+  if (mode === 'tricky' && L.i !== lantNext) {
+    sfx.bad();
+    for (let i = 0; i < 6; i++) delete flags['lant_' + i]; store.set('flags', flags); lantNext = 0;
+    toast(`Oops! The lanterns went out. Rainbow order: start with red!`);
+    return;
+  }
+  setFlag('lant_' + L.i); lantNext = L.i + 1;
+  poof(L.x, L.y - 20, L.col); tone(523 * Math.pow(2, L.i / 6 * 1.2), 0.3, 'triangle', 0.1);
+  const k = LANTERNS.filter((_, i) => lantLit(i)).length;
+  if (k >= 6) {
+    setFlag('lant_done'); sqCoins(40); gotRune('wind', true); sqFurn('leaflamp');
+    setTimeout(() => sqPrize('Lantern Lighter!', 'All six <b class="rb">rainbow lanterns</b> glow over Treetop Village again!', [{ coins: 40 }, runeReward('wind'), furnReward('leaflamp')]), 500);
+  } else toast(`A lantern! ${k} of 6`);
+}
+
+// ---------------------------------------------------------------- the Waterfall Grotto, hidden past Whisper Woods
+LANDS.woods.exits.push({ side: 'e', a: 12, b: 13, to: 'falls', entry: 'woods', back: 'falls' });
+LANDS.woods.secret = { lane: [26, 12, 47, 13], bushes: [[45, 12], [45, 13]], flag: 'falls_found', glow: [46.3, 11.6] };
+const FALLS = { w: 30, h: 20, px: 15 * TS, py: 10 * TS, rx: 7 * TS, ry: 3.3 * TS };
+let caveCool = false;
+function buildFalls() {
+  const W = FALLS.w, H = FALLS.h, m = newMap(W, H, 'land');
+  Object.assign(m, { field: true, calm: true, noRespawn: true, ff: true, landId: 'falls', dusk: '#8F84D0', name: 'Waterfall Grotto', music: 'falls', sqFlag: 'falls_found' });
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(141);
+  px(c, 0, 0, W * TS, H * TS, '#1C3A33');
+  for (let i = 0; i < W * H * 2; i++) px(c, (r() * W * TS) | 0, (r() * H * TS) | 0, 2, 1, r() < 0.6 ? '#17302B' : '#24473D');
+  for (let i = 0; i < W * H * 0.6; i++) { const x = (r() * W * TS) | 0, y = (r() * H * TS) | 0; px(c, x, y, 1, 2, '#2F7C6B'); px(c, x, y, 1, 1, '#47A383'); }
+  // the cliff across the top
+  for (let ty = 0; ty <= 5; ty++) for (let tx = 0; tx < W; tx++) setSolid(m, tx, ty);
+  px(c, 0, 0, W * TS, 6 * TS, '#3A3355');
+  for (let y = 0; y < 6 * TS; y += 8) for (let x = -((r() * 12) | 0); x < W * TS;) { const w = 10 + ((r() * 22) | 0), h = 6 + ((r() * 3) | 0); px(c, x, y, w - 1, h, r() < 0.5 ? '#4B4470' : '#433C66'); px(c, x, y, w - 1, 1, '#5A5280'); px(c, x + w - 2, y + 1, 1, h - 1, '#2A2440'); x += w; }
+  px(c, 0, 6 * TS - 3, W * TS, 3, '#2A2440');
+  for (let i = 0; i < 40; i++) { const x = (r() * W * TS) | 0, y = (r() * 5 * TS) | 0; px(c, x, y, 3 + ((r() * 5) | 0), 2, '#2F7C6B'); }
+  for (let i = 0; i < 14; i++) { const x = (r() * W * TS) | 0, len = 10 + ((r() * 40) | 0); px(c, x, 0, 1, len, '#2F7C6B'); px(c, x - 1, len, 3, 2, i % 2 ? '#7CFF6B' : '#C77DFF'); m.lights.push({ x, y: len, r: 8, col: i % 2 ? '#7CFF6B' : '#C77DFF', a: 0.5, fl: 1 }); }
+  // the dark cave door behind where the water falls
+  const DX = 15 * TS;
+  px(c, DX - 18, 3 * TS + 4, 36, 2 * TS - 4, OUT); pell(c, DX, 3 * TS + 6, 18, 8, OUT);
+  px(c, DX - 16, 3 * TS + 6, 32, 2 * TS - 6, '#0A0618'); pell(c, DX, 3 * TS + 7, 16, 7, '#0A0618');
+  for (let i = 0; i < 5; i++) px(c, DX - 12 + i * 6, 4 * TS + ((i * 5) % 9), 2, 2, i % 2 ? '#3DF2FF' : '#C77DFF');
+  m.lights.push({ x: DX, y: 4 * TS + 8, r: 20, col: '#9B8CF0', a: 0.4, fl: 2 });
+  setSolid(m, 14, 5, 0); setSolid(m, 15, 5, 0);
+  m.door = { x: DX, y: 5 * TS + 12 };
+  // trees on top of the cliff, above everybody
+  for (let x = 0; x < W * TS; x += 22) { const y = -2 + ((x * 3) % 7); pell(f, x, y, 16, 12, OUT); pell(f, x, y, 15, 11, '#0B2A2E'); pell(f, x - 2, y - 3, 10, 7, '#12403C'); }
+  // the pool
+  const PX = FALLS.px, PY = FALLS.py, RX = FALLS.rx, RY = FALLS.ry;
+  pell(c, PX, PY + 2, RX + 10, RY + 8, '#3A3355'); pell(c, PX, PY, RX + 7, RY + 5, '#6B6494');
+  for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2, x = PX + Math.cos(a) * (RX + 6), y = PY + Math.sin(a) * (RY + 4); if (y < 6.5 * TS) continue; pell(c, x, y, 3, 2, i % 2 ? '#8A83B5' : '#5A5280'); px(c, (x - 1) | 0, (y - 1) | 0, 2, 1, '#A9A2D4'); }
+  pell(c, PX, PY, RX, RY, '#1C4AA8'); pell(c, PX, PY + 3, RX - 8, RY - 6, '#18307A'); pell(c, PX, PY + 6, RX - 30, RY - 18, '#122060');
+  for (let ty = 6; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    const dx = (tx * TS + 8 - PX) / (RX + 4), dy = (ty * TS + 8 - PY) / (RY + 4);
+    if (ty >= 7 && dx * dx + dy * dy <= 1) { setSolid(m, tx, ty, 5); const ix = (tx * TS + 8 - PX) / (RX - 6), iy = (ty * TS + 8 - PY) / (RY - 6); if (ix * ix + iy * iy <= 1) m.water.push([tx, ty]); }
+  }
+  // a stone ledge under the cliff, behind the falls
+  for (let x = 0; x < W * TS; x += 9) { px(c, x, 6 * TS, 8, TS - 2, '#5A5280'); px(c, x, 6 * TS, 8, 1, '#8A83B5'); }
+  // lily pads
+  for (let i = 0; i < 8; i++) { const a = r() * Math.PI * 2, k = 0.45 + r() * 0.45, x = PX + Math.cos(a) * (RX - 12) * k, y = PY + 6 + Math.sin(a) * (RY - 10) * k; pell(c, x, y, 5, 3, '#1B5E3A'); pell(c, x - 1, y - 0.5, 4, 2.2, '#2F8F48'); }
+  // a misty rainbow over the pool
+  RAINBOW.forEach((col, k) => { const rr = 50 - k * 2; for (let a = Math.PI * 1.08; a < Math.PI * 1.92; a += 0.012) { const x = PX + Math.cos(a) * rr * 1.5, y = PY + 34 + Math.sin(a) * rr; if (y > 7 * TS + 4) px(c, Math.round(x), Math.round(y), 2, 2, mixHex(col, '#1C4AA8', 0.45)); } });
+  m.lights.push({ x: PX, y: PY - 6, r: 50, col: '#FFB8DA', a: 0.12, fl: 2 });
+  m.lights.push({ x: PX, y: 7 * TS, r: 60, col: '#BDF4FF', a: 0.35, fl: 2 });
+  // border trees, open to the west
+  const exitTile = (x, y) => x <= 1 && y >= 12 && y <= 13;
+  for (let y = 6; y < H; y++) for (let x = 0; x < W; x++) if ((x < 2 || y >= H - 2 || x >= W - 2) && !exitTile(x, y)) setSolid(m, x, y);
+  for (let x = 0; x < W; x += 2) drawTree(c, f, m, x + 1, H - 2, 'dark', r);
+  for (let y = 7; y < H - 2; y += 2) { if (!exitTile(0, y)) drawTree(c, f, m, 0, y, 'dark', r); drawTree(c, f, m, W - 1, y, 'dark', r); }
+  // mossy rocks (one hides a little someone) and ferns, glowing flowers
+  for (const [tx, ty] of [[25, 9], [26, 9], [4, 9], [22, 15], [7, 16]]) drawRock(c, f, m, tx, ty, '#4E6E5A');
+  for (const [tx, ty] of [[25, 9], [26, 9]]) { const x = tx * TS, y = ty * TS; pell(f, x + 8, y + 4, 9, 6, OUT); pell(f, x + 8, y + 4, 8, 5, '#4E6E5A'); px(f, x + 3, y, 6, 2, '#3E8C4A'); }
+  m.flowers = [];
+  for (let i = 0; i < 60; i++) {
+    const tx = 2 + ((r() * (W - 4)) | 0), ty = 7 + ((r() * (H - 9)) | 0); if (solidAt(m, tx, ty)) continue;
+    const x = tx * TS + 4 + ((r() * 8) | 0), y = ty * TS + 4 + ((r() * 8) | 0), col = pick(['#3DF2FF', '#C77DFF', '#FF9ACB', '#FFFFFF']);
+    if (i % 3) { px(c, x, y, 2, 2, col); px(c, x - 1, y + 1, 1, 1, col); px(c, x + 2, y + 1, 1, 1, col); px(c, x, y + 2, 1, 2, '#2F7C6B'); m.flowers.push([x + 1, y + 1, col]); }
+    else for (let k = -3; k <= 3; k++) px(c, x + k, y - 4 + Math.abs(k), 1, 4 - Math.abs(k), '#3E9A6A');
+  }
+  m.bushes = []; m.obs = []; m.runes = []; m.switches = []; m.castles = []; m.champ = null; m.spawns = []; m.gemSpots = [];
+  m.exits = [{ test: h => h.x < 10, to: 'woods', entry: 'falls' }];
+  m.entries = { woods: { x: 2 * TS + 8, y: 13 * TS + 2, face: 'side' }, cave: { x: 15 * TS, y: 6 * TS + 10, face: 'down' } };
+  m.falls = { x0: PX - 26, x1: PX + 26, y0: 0, y1: 7 * TS + 6 };
+  return m;
+}
+function fallsNpcs() {
+  return [sqNpc({ spr: 'bud', x: 25.5 * TS + 2, y: 8 * TS + 12, hidden: () => !!flags.bud_found, mark: () => ['!', '#FFD23F'],
+    talk() {
+      setFlag('bud_found'); poof(this.x, this.y - 10, '#FFD93D'); sfx.win();
+      toast(flags.village_found ? 'Bud: You found me! I got lost looking at the waterfall. I\'ll hop home to my mama in Treetop Village!'
+        : 'Bud: You found me! I\'ll hop home now. I live in Treetop Village, way up the Great Tree in Rainbow Town!');
+    } })];
+}
+function fallsDrawables(list) {
+  const F = cur.falls; if (!F) return;
+  list.push({ y: 7 * TS, d: (cx, cy) => { // falling water, a little see-through so you can spot the cave behind it
+    for (let x = F.x0; x < F.x1; x += 2) {
+      const k = (x - F.x0) / (F.x1 - F.x0), edge = k < 0.08 || k > 0.92;
+      ctx.globalAlpha = edge ? 0.45 : 0.72;
+      ctx.fillStyle = (Math.floor(x / 2) % 3) ? '#5FA8E8' : '#7FD6F5'; ctx.fillRect(x - cx, F.y0 - cy, 2, F.y1 - F.y0);
+      for (let s = 0; s < 3; s++) { const y = ((clock * 120 + x * 37 + s * 41) % (F.y1 - F.y0)); ctx.fillStyle = '#E8FBFF'; ctx.fillRect(x - cx, Math.round(F.y0 + y - cy), 1, 6); }
+    }
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#E8FBFF';
+    for (let i = 0; i < 16; i++) { const a = clock * 3 + i, x = F.x0 + ((i * 13 + clock * 30) % (F.x1 - F.x0)), y = F.y1 - 2 + Math.sin(a) * 2; ctx.fillRect(Math.round(x - cx), Math.round(y - cy), 2, 2); }
+    ctx.globalAlpha = 1;
+  } });
+}
+
+// ---------------------------------------------------------------- the Echo Cavern, behind the waterfall
+const CAVE_ROOMS = [[17, 18, 5, 3], [7, 12, 5.5, 4], [17, 5, 6, 3], [27, 11, 5, 4], [5, 4, 3, 2.2], [29, 19, 3, 2.2]];
+const CAVE_TUNNELS = [[14, 17, 9, 14], [17, 15, 17, 8], [20, 17, 24, 13], [6, 8, 5, 6], [11, 5, 8, 4], [28, 15, 29, 17], [17, 20, 17, 23]];
+const STONE_SPOTS = [[4, 4], [9, 15], [21, 4], [29, 9], [30, 19], [12, 6], [25, 14]];
+const stonesNeeded = () => mode === 'tricky' ? 7 : 5;
+const stonesFound = () => STONE_SPOTS.slice(0, stonesNeeded()).filter((_, i) => flags['gstone_' + i]).length;
+function buildCave() {
+  const W = 34, H = 24, m = newMap(W, H, 'land');
+  Object.assign(m, { field: true, calm: true, noRespawn: true, ff: false, landId: 'cave', dusk: flags.cave_done ? '#8478C8' : '#6A5EAA', name: 'Echo Cavern', music: 'cave', sqFlag: 'cave_found', cave: true });
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(151);
+  for (let i = 0; i < m.solid.length; i++) m.solid[i] = 1;
+  for (let ty = 1; ty < H; ty++) for (let tx = 1; tx < W - 1; tx++) {
+    const x = tx + 0.5, y = ty + 0.5;
+    const inRoom = CAVE_ROOMS.some(([cx, cy, rx, ry]) => { const a = Math.atan2(y - cy, x - cx), j = 1 + 0.12 * Math.sin(a * 3 + cx) + 0.08 * Math.sin(a * 5 + cy); return ((x - cx) / (rx * j)) ** 2 + ((y - cy) / (ry * j)) ** 2 <= 1; });
+    const inTun = CAVE_TUNNELS.some(([x0, y0, x1, y1]) => { const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy, t = Math.max(0, Math.min(1, ((x - x0 - 0.5) * dx + (y - y0 - 0.5) * dy) / L)); return Math.hypot(x - 0.5 - x0 - dx * t, y - 0.5 - y0 - dy * t) < 1.15; });
+    if (inRoom || inTun) setSolid(m, tx, ty, 0);
+  }
+  // the underground pool
+  const pool = [6, 12, 3, 2];
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) if (((tx + 0.5 - pool[0]) / pool[2]) ** 2 + ((ty + 0.5 - pool[1]) / pool[3]) ** 2 <= 1) { setSolid(m, tx, ty, 5); m.water.push([tx, ty]); }
+  // floor and walls
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    const x = tx * TS, y = ty * TS, v = m.solid[ty * W + tx];
+    if (v === 0) { px(c, x, y, TS, TS, (tx + ty) % 2 ? '#2A2140' : '#2E2446'); if (r() < 0.5) px(c, x + ((r() * 13) | 0), y + ((r() * 13) | 0), 2, 1, '#3B2F5E'); if (r() < 0.2) px(c, x + ((r() * 13) | 0), y + ((r() * 13) | 0), 1, 1, '#5A4E8A'); }
+    else if (v === 5) { px(c, x, y, TS, TS, '#2A2140'); }
+    else {
+      px(c, x, y, TS, TS, '#140E24'); px(c, x, y, TS, 2, '#1E1633');
+      if (ty + 1 < H && m.solid[(ty + 1) * W + tx] !== 1) { px(c, x, y + 4, TS, 12, '#3B2F5E'); px(c, x, y + 4, TS, 1, '#5A4E8A'); px(c, x, y + 14, TS, 2, '#241A3A'); if (tx % 2) px(c, x + 5, y + 7, 1, 6, '#2E2446'); }
+      // glow worms in the walls
+      const nearFloor = [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !solidAt(m, tx + dx, ty + dy));
+      if (nearFloor && r() < 0.18) { const gx = x + 3 + ((r() * 10) | 0), gy = y + 2 + ((r() * 10) | 0), col = r() < 0.6 ? '#3DF2FF' : '#B9FF6B'; px(c, gx, gy, 1, 1, col); m.lights.push({ x: gx, y: gy, r: 6, col, a: 0.6, fl: 2 }); }
+    }
+  }
+  pell(c, pool[0] * TS, pool[1] * TS, pool[2] * TS + 7, pool[3] * TS + 7, '#4B4470'); pell(c, pool[0] * TS, pool[1] * TS, pool[2] * TS + 5, pool[3] * TS + 5, '#18307A'); pell(c, pool[0] * TS, pool[1] * TS, pool[2] * TS - 2, pool[3] * TS - 2, '#1C4AA8'); pell(c, pool[0] * TS + 3, pool[1] * TS + 3, pool[2] * TS - 12, pool[3] * TS - 10, '#122060');
+  m.lights.push({ x: pool[0] * TS, y: pool[1] * TS, r: 46, col: '#3DF2FF', a: flags.cave_done ? 0.5 : 0.3, fl: 2 });
+  // crystals in the north chamber, glowing mushrooms in the east, rocks here and there
+  const freeT = (tx, ty) => !solidAt(m, tx, ty) && !CAVE_TUNNELS.some(([x0, y0, x1, y1]) => Math.hypot(tx - x0, ty - y0) < 2 || Math.hypot(tx - x1, ty - y1) < 2) && !STONE_SPOTS.some(([x, y]) => Math.abs(x - tx) + Math.abs(y - ty) < 2) && Math.hypot(tx - 17, ty - 18) > 3;
+  const edgeT = (tx, ty) => [[0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => m.solid[(ty + dy) * W + tx + dx] === 1);
+  let n = 0;
+  for (let k = 0; k < 400 && n < 10; k++) {
+    const tx = 11 + ((r() * 13) | 0), ty = 2 + ((r() * 6) | 0); if (!freeT(tx, ty) || !edgeT(tx, ty)) continue;
+    const x = tx * TS + 8, y = ty * TS + 14, col = [RAINBOW[4], '#3DF2FF', '#C9BFFF', RAINBOW[5], '#7FE8FF'][n % 5];
+    pell(c, x, y, 6, 2, 'rgba(10,6,24,.5)');
+    px(f, x - 4, y - 10, 3, 10, OUT); px(f, x - 3, y - 9, 2, 9, col); px(f, x - 1, y - 16, 4, 16, OUT); px(f, x, y - 15, 2, 15, '#FFFFFF'); px(f, x + 2, y - 8, 3, 8, OUT); px(f, x + 3, y - 7, 1, 7, col);
+    m.lights.push({ x, y: y - 8, r: flags.cave_done ? 30 : 20, col, a: flags.cave_done ? 0.7 : 0.45, fl: 1 }); setSolid(m, tx, ty); n++;
+  }
+  n = 0;
+  for (let k = 0; k < 400 && n < 12; k++) {
+    const tx = 22 + ((r() * 10) | 0), ty = 7 + ((r() * 9) | 0); if (!freeT(tx, ty)) continue;
+    const x = tx * TS + 4 + ((r() * 8) | 0), y = ty * TS + 6 + ((r() * 6) | 0), col = n % 2 ? '#C77DFF' : '#FF9ACB';
+    px(c, x, y, 1, 3, '#E8DDF5'); px(c, x - 2, y - 2, 5, 2, col); px(c, x - 1, y - 3, 3, 1, col); m.lights.push({ x, y: y - 2, r: 12, col, a: 0.55, fl: 1 }); n++;
+  }
+  n = 0;
+  for (let k = 0; k < 400 && n < 9; k++) { const tx = 2 + ((r() * (W - 4)) | 0), ty = 2 + ((r() * (H - 4)) | 0); if (!freeT(tx, ty) || !edgeT(tx, ty)) continue; drawRock(c, f, m, tx, ty, '#4B4470'); n++; }
+  // Digby's lantern
+  m.lights.push({ x: 20 * TS, y: 17 * TS, r: 40, col: '#FFC870', a: 0.6, fl: 2 });
+  // the glow stones you are looking for
+  m.stones = STONE_SPOTS.map(([tx, ty], i) => { const t = nearestFreeTile(m, tx, ty) || [17, 18]; return { i, x: t[0] * TS + 8, y: t[1] * TS + 12 }; });
+  m.flowers = [];
+  m.bushes = []; m.obs = []; m.runes = []; m.switches = []; m.castles = []; m.champ = null; m.spawns = []; m.gemSpots = [];
+  m.exits = [{ test: h => h.y > 23 * TS + 2, to: 'falls', entry: 'cave' }];
+  m.entries = { falls: { x: 17 * TS + 8, y: 21 * TS + 8, face: 'up' } };
+  return m;
+}
+function caveNpcs() {
+  return [sqNpc({ spr: 'digby', x: 20 * TS, y: 18 * TS + 4, reach: 16,
+    mark: () => flags.cave_done ? null : stonesFound() >= stonesNeeded() ? ['!', '#7CFF6B'] : flags.cave_asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'],
+    talk() {
+      const k = stonesFound(), n = stonesNeeded();
+      if (flags.cave_done) { toast('Digby: Look how the crystals shine now! Come and fish in my pool any time.'); return; }
+      if (k >= n) {
+        setFlag('cave_done'); sqCoins(40); gotRune('ice', true); sqFurn('crystal');
+        cur.dusk = '#8478C8'; for (const L of cur.lights) if (L.r === 20) { L.r = 30; L.a = 0.7; }
+        sqPrize('Cave Explorer!', `You found all ${n} <b class="rb">glow stones</b>. Digby's cavern sparkles again!`, [{ coins: 40 }, runeReward('ice'), furnReward('crystal')]);
+        return;
+      }
+      setFlag('cave_asked');
+      toast(k ? `Digby: You found ${k} of ${n} glow stones! Keep looking in every little tunnel.` : `Digby: Oh, hello! I dropped my ${n} glow stones and they rolled away in the dark. Can you find them for me?`);
+    } })];
+}
+
+// ---------------------------------------------------------------- music for the new places (all original)
+// Treetop Village: "Up in the Leaves" - a light, happy waltz in C major
+addTrack('treetop', {
+  bpm: 132, bar: 12, patch: { lead: 'flute', pad: 'strings', arp: 'pluck', bass: 'round' }, mix: { lead: 0.9, pad: 0.6, arp: 0.6 }, fx: { delay: 1.2, verb: 1.2 },
+  chords: 'C G Am F  C F G G  Am Em F C  Dm G C C',
+  lead: `E5/4 G5/4 C6/4 | B5/6 G5/6 | A5/4 C6/4 E5/4 | F5/8 A5/4 |
+         G5/4 E5/4 C5/4 | A5/6 F5/6 | G5/4 B5/4 D6/4 | G5/12 |
+         A5/4 C6/4 B5/4 | G5/8 E5/4 | F5/4 A5/4 C6/4 | E5/8 G5/4 |
+         F5/4 E5/4 D5/4 | B4/4 D5/4 G5/4 | E5/4 D5/4 C5/4 | C5/12`,
+  bass: 'r...f...f...', arp: '..1.2...1.2.',
+  drums: { k: 'o...........', s: '', h: '....o...o...' },
+});
+addTrack('falls', { base: 'fly', tr: 2, bpm: 100, patch: { arp: 'harpsi' }, fx: { delay: 1.5, verb: 1.5 } });
+addTrack('cave', { base: 'fly', tr: -3, bpm: 84, drums: null, patch: { lead: 'bell', pad: 'choir' }, mix: { arp: 0.5 }, fx: { delay: 1.7, verb: 1.8 } });
+if (typeof AMBIENT !== 'undefined') {
+  AMBIENT.village = { n: 22, cols: ['#7CFF6B', '#FFD23F', '#FF9ACB'], vy: [6, 12], vx: [-6, 6], kind: 'petal' };
+  AMBIENT.falls = { n: 30, cols: ['#FFFFFF', '#BDF4FF'], vy: [-8, -3], vx: [-4, 4], kind: 'spore' };
+  AMBIENT.cave = { n: 18, cols: ['#3DF2FF', '#C9BFFF'], vy: [-5, -2], vx: [-2, 2], kind: 'spore' };
+}
+
+// ---------------------------------------------------------------- trophies for the new things
+if (typeof TROPHIES !== 'undefined') {
+  Object.assign(GLYPH, { fish: ['.....', '.##.#', '#####', '.##.#', '.....'], tree: ['.###.', '#####', '.###.', '..#..', '..#..'], drop: ['..#..', '.###.', '#####', '#####', '.###.'] });
+  TROPHIES.splice(TROPHIES.length - 1, 0,
+    { id: 'village', name: 'Up in the Leaves', desc: 'Find the secret Treetop Village', tier: 'bronze', icon: 'tree', test: () => !!flags.village_found },
+    { id: 'falls', name: 'Behind the Waterfall', desc: 'Find the cave behind the hidden waterfall', tier: 'silver', icon: 'drop', test: () => !!flags.cave_found },
+    { id: 'fish10', name: 'Gone Fishing', desc: 'Catch 10 fish', tier: 'bronze', icon: 'fish', prog: () => [fishTotal, 10] },
+    { id: 'fishbook', name: 'Fish Expert', desc: 'Catch every kind of fish', tier: 'gold', icon: 'fish', prog: () => [FISH_BOOK.filter(id => fishSeen[id]).length, FISH_BOOK.length] },
+    { id: 'helper', name: 'Helping Hand', desc: 'Finish 5 side quests', tier: 'silver', icon: 'heart', prog: () => [sqQuestsDone(), 5] },
+  );
+}
+
+// ---------------------------------------------------------------- hooking into the game
+const SQ_MAPS = { village: buildVillage, falls: buildFalls, cave: buildCave };
+{
+  const _bl = buildLand;
+  buildLand = function (id) {
+    if (SQ_MAPS[id]) return SQ_MAPS[id]();
+    const m = _bl(id);
+    if (id === 'woods' && !flags.falls_found) m.sqHint = { x: 45 * TS, y: 13 * TS };
+    return m;
+  };
+  const _em = enterMap;
+  enterMap = function (m, entry, ...a) {
+    const r = _em(m, entry, ...a);
+    sqNpcs = m === OUTMAP ? [sqNpc({ spr: 'fennel', x: m.fennel ? m.fennel.x : 29 * TS + 8, y: m.fennel ? m.fennel.y : 25 * TS + 12, reach: 18, talk: fennelTalk, draw: fennelDraw,
+        mark: () => !hasPole() || (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]
+      : m.landId === 'village' ? villageNpcs() : m.landId === 'falls' ? fallsNpcs() : m.landId === 'cave' ? caveNpcs() : [];
+    fishing = null; if ($('fishBar')) $('fishBar').hidden = true;
+    if (m.landId === 'village') { lantNext = 0; while (lantNext < 6 && lantLit(lantNext)) lantNext++; }
+    if (entry === 'village' && m === OUTMAP) ladderCool = true;
+    if (entry === 'cave' && m.landId === 'falls') caveCool = true;
+    if (m.sqFlag && !flags[m.sqFlag]) {
+      setFlag(m.sqFlag);
+      setTimeout(() => { toast(`You found the secret ${m.name}!`); sfx.win(); }, 350);
+    }
+    return r;
+  };
+  const _uq = updateQuest;
+  updateQuest = function (dt) { _uq(dt); updateSide(dt); };
+  const _ad = adventureDrawables;
+  adventureDrawables = function (list) { _ad(list); sideDrawables(list); };
+  const _al = adventureLights;
+  adventureLights = function (cx, cy) { _al(cx, cy); sideLights(cx, cy); };
+}
+// the first time you play, OUTMAP was built before Fennel was set up: give him a place in town too
+function sqEnsureTownNpcs() { if (cur === OUTMAP && !sqNpcs.length && OUTMAP.fennel) enterMapNpcsOnly(); }
+function enterMapNpcsOnly() { sqNpcs = [sqNpc({ spr: 'fennel', x: OUTMAP.fennel.x, y: OUTMAP.fennel.y, reach: 18, talk: fennelTalk, draw: fennelDraw, mark: () => !hasPole() || (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]; }
+
+function updateSide(dt) {
+  sqUI(); sqEnsureTownNpcs();
+  const m = cur;
+  if (m !== OUTMAP && sqNpcs.length && sqNpcs[0].spr === 'fennel') sqNpcs = [];
+  sqUpdateFishing(dt);
+  if (m.bell) m.bell.ring = Math.max(0, m.bell.ring - dt);
+  if (state !== 'play') return;
+  sqUpdateNpcs(dt); if (state !== 'play') return;
+  // the town's Great Tree: climb the ladder
+  if (m === OUTMAP && m.entries.village) {
+    const atLadder = Math.floor(hero.x / TS) === GTREE.tx && hero.y < GTREE.ladderY * TS + 9;
+    if (ladderCool && hero.y > GTREE.ladderY * TS + 26) ladderCool = false;
+    if (!flags.village_found && Math.hypot(hero.x - 24.5 * TS, hero.y - 7 * TS) < 60) hint('gtree', 'Leaves are rustling way up in the big tree... is somebody up there?');
+    if (!ladderCool && atLadder) { ladderCool = true; tone(400, 0.3, 'triangle', 0.07, 900); travel('village', 'town'); return; }
+    if (hasPole() && fishCount() === 0 && fishTotal === 0 && Math.abs(hero.y - 25 * TS) < 24 && Math.abs(hero.x - 30 * TS) < 60) hint('fishhow', 'Stand by the water and tap the fish button!');
+  }
+  if (m.sqHint && !flags.falls_found && Math.hypot(hero.x - m.sqHint.x, hero.y - m.sqHint.y) < 80) hint('fallshint', 'Splash, splash! Is that a waterfall behind those sparkly bushes?');
+  // the waterfall: a cave behind it
+  if (m.landId === 'falls') {
+    if (caveCool && hero.y > 6 * TS + 14) caveCool = false;
+    if (!flags.cave_found && Math.hypot(hero.x - 15 * TS, hero.y - 6 * TS) < 56) hint('cavehint', 'There is a dark cave behind the waterfall! Walk in!');
+    const ttx = Math.floor(hero.x / TS);
+    if (!caveCool && (ttx === 14 || ttx === 15) && hero.y < 5 * TS + 12) { caveCool = true; travel('cave', 'falls'); return; }
+  }
+  // the village: lanterns, the moon bell, the treasure chest
+  if (m.lanterns) for (const L of m.lanterns) if (!lantLit(L.i) && sqTalkD(L.x, L.y) < 18) { if (!L.cool) { L.cool = true; lightLantern(L); if (state !== 'play') return; } } else if (sqTalkD(L.x, L.y) > 28) L.cool = false;
+  if (m.bell && sqTalkD(m.bell.x, m.bell.y + 8) < 16 && m.bell.ring <= 0) {
+    m.bell.ring = 1.6; [523, 784, 1047].forEach((fq, i) => tone(fq, 0.9, 'sine', 0.09, null, i * 0.02));
+    for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, s = rand(20, 60); poofs.push({ x: m.bell.x, y: m.bell.y - 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, life: 1, col: RAINBOW[i % 6] }); }
+  }
+  if (m.chest && !flags[m.chest.flag] && sqTalkD(m.chest.x, m.chest.y + 6) < 18) {
+    setFlag(m.chest.flag); sfx.win(); poof(m.chest.x, m.chest.y - 8, '#FFD23F');
+    for (let i = 0; i < 8; i++) drop('coin', m.chest.x, m.chest.y + 10); drop('gem', m.chest.x, m.chest.y + 10); dropRune(m.chest.x, m.chest.y + 10);
+    toast('Treetop treasure!');
+  }
+  // the cavern's glow stones
+  if (m.stones) for (const s of m.stones) if (s.i < stonesNeeded() && !flags['gstone_' + s.i] && sqTalkD(s.x, s.y) < 12) {
+    setFlag('gstone_' + s.i); poof(s.x, s.y - 6, '#7FE8FF'); [988, 1319, 1568, 1976].forEach((fq, i) => tone(fq, 0.12, 'triangle', 0.07, null, i * 0.07));
+    const k = stonesFound(), n = stonesNeeded();
+    toast(k >= n ? `You found all ${n} glow stones! Bring them to Digby!` : `A glow stone! ${k} of ${n}`);
+  }
+}
+function sideDrawables(list) {
+  sqNpcDrawables(list);
+  sqFishDrawables(list);
+  const m = cur;
+  if (m.landId === 'falls') fallsDrawables(list);
+  if (m.lanterns) for (const L of m.lanterns) list.push({ y: L.y, d: (cx, cy) => {
+    const X = Math.round(L.x - cx), Y = Math.round(L.y - 22 - cy), on = lantLit(L.i);
+    ctx.fillStyle = OUT; ctx.fillRect(X - 5, Y - 4, 10, 11); ctx.fillStyle = on ? L.col : mixHex(L.col, '#241A3A', 0.65); ctx.fillRect(X - 4, Y - 3, 8, 9);
+    if (on) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - 1, Y, 2, 3); }
+    ctx.fillStyle = '#5A3A2E'; ctx.fillRect(X - 5, Y - 6, 10, 2); ctx.fillRect(X - 1, Y - 8, 2, 2);
+  } });
+  if (m.bell) list.push({ y: m.bell.y + 2, d: (cx, cy) => {
+    const B = m.bell, sw = Math.sin(clock * 10) * B.ring * 3, X = Math.round(B.x + sw - cx), Y = Math.round(B.y - 22 - cy);
+    ctx.fillStyle = OUT; ctx.fillRect(X - 8, Y, 16, 15); ctx.fillRect(X - 10, Y + 12, 20, 4);
+    ctx.fillStyle = '#C9BFFF'; ctx.fillRect(X - 7, Y + 1, 14, 13); ctx.fillRect(X - 9, Y + 13, 18, 2); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - 5, Y + 3, 2, 8);
+    ctx.fillStyle = '#FFD23F'; ctx.fillRect(X - 1, Y + 15, 3, 3);
+  } });
+  if (m.chest) list.push({ y: m.chest.y, d: (cx, cy) => ctx.drawImage(SQS.chest[flags[m.chest.flag] ? 1 : 0], Math.round(m.chest.x - 9 - cx), Math.round(m.chest.y - 14 - cy)) });
+  if (m.stones) for (const s of m.stones) if (s.i < stonesNeeded() && !flags['gstone_' + s.i]) list.push({ y: s.y, d: (cx, cy) => {
+    ctx.globalAlpha = 0.45; ctx.drawImage(shadowSpr, Math.round(s.x - 6 - cx), Math.round(s.y - 2 - cy), 12, 4); ctx.globalAlpha = 1;
+    ctx.drawImage(SQS.stone, Math.round(s.x - 5 - cx), Math.round(s.y - 12 + Math.sin(clock * 3 + s.i) * 1.5 - cy));
+  } });
+}
+function sideLights(cx, cy) {
+  const m = cur;
+  if (m.cave) { ctx.globalAlpha = 0.5; ctx.drawImage(glow('#FFE2A0', 54), Math.round(hero.x - cx - 54), Math.round(hero.y - 12 - cy - 54)); } // your little lantern in the dark
+  if (m.lanterns) for (const L of m.lanterns) { const on = lantLit(L.i); ctx.globalAlpha = on ? 0.75 + 0.15 * Math.sin(clock * 3 + L.i) : 0.15; ctx.drawImage(glow(L.col, on ? 30 : 10), Math.round(L.x - (on ? 30 : 10) - cx), Math.round(L.y - 22 - (on ? 30 : 10) - cy)); }
+  if (m.stones) for (const s of m.stones) if (s.i < stonesNeeded() && !flags['gstone_' + s.i]) { ctx.globalAlpha = 0.6 + 0.3 * Math.sin(clock * 4 + s.i); ctx.drawImage(glow('#7FE8FF', 16), Math.round(s.x - 16 - cx), Math.round(s.y - 8 - 16 - cy)); }
+  if (m.bell && m.bell.ring > 0) { ctx.globalAlpha = m.bell.ring * 0.5; ctx.drawImage(glow('#C9BFFF', 40), Math.round(m.bell.x - 40 - cx), Math.round(m.bell.y - 14 - 40 - cy)); }
+  if (m.chest && !flags[m.chest.flag]) { ctx.globalAlpha = 0.35 + 0.2 * Math.sin(clock * 3); ctx.drawImage(glow('#FFD23F', 16), Math.round(m.chest.x - 16 - cx), Math.round(m.chest.y - 8 - 16 - cy)); }
+  if (fishing && fishing.phase === 'caught' && FISH[fishing.fish] && !FISH[fishing.fish].junk) { ctx.globalAlpha = 0.5; ctx.drawImage(glow(FISH[fishing.fish].body, 18), Math.round(hero.x - 18 - cx), Math.round(hero.y - 40 - 18 - cy)); }
+  // somebody peeking out of the Great Tree's leaves
+  if (m === OUTMAP && m.entries.village && !flags.village_found && Math.floor(clock / 3) % 3 === 0) {
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    const X = Math.round(24.5 * TS - 20 - cx), Y = Math.round(1.4 * TS + 10 - cy);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X, Y, 2, 2); ctx.fillRect(X + 5, Y, 2, 2); ctx.fillStyle = '#7CFF6B'; ctx.fillRect(X + 2, Y - 4, 3, 2);
+    ctx.globalCompositeOperation = 'lighter';
+  }
+  ctx.globalAlpha = 1;
+}
 
 buildSprites();
 buildSPR3();
