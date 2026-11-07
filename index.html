@@ -437,7 +437,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
-  <p class="tver">version 22</p>
+  <p class="tver">version 22.1</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -9818,6 +9818,7 @@ const CLB_LEVELS = {
     doors: [[0, 50, 'a'], [1, 150, 'a'], [1, 112, 'b'], [3, 62, 'b'], [3, 30, 'c'], [4, 240, 'c'], [0, 305, 'd'], [2, 290, 'd']],
     ladders: [],
     goal: [4, 205],
+    acorns: [[0, 180], [2, 330]],
     cols: { a: '#FF4FA0', b: '#FFD23F', c: '#7CFF6B', d: '#3DF2FF' },
   },
   tricky: {
@@ -9827,25 +9828,97 @@ const CLB_LEVELS = {
       [3, 360, 'p5'], [6, 95, 'p5'], [4, 60, 'p6'], [7, 290, 'p6'], [5, 210, 'p7'], [0, 330, 'p7'], [6, 135, 'p8'], [8, 210, 'p8']],
     ladders: [[2, 0, 285]],   // [top ledge, bottom ledge, x]
     goal: [8, 172],
+    acorns: [[4, 25], [7, 245], [6, 95]],
     cols: { p1: '#FF4FA0', p2: '#FF9F1C', p3: '#FFD23F', p4: '#7CFF6B', p5: '#3DF2FF', p6: '#5B8CFF', p7: '#C77DFF', p8: '#FFFFFF' },
   },
 };
+// Three stages, each one taller than the last. Stage 1 is the hand made level above; stages 2 and 3 are grown
+// from a seed (the same every time), always with a way to the top, plus side branches with acorns and doors that
+// drop you back down. Progress through the stages is remembered, per difficulty.
+const CLB_STAGES = 3, CLB_PAL = ['#FF4FA0', '#FF9F1C', '#FFD23F', '#7CFF6B', '#3DF2FF', '#5B8CFF', '#C77DFF', '#FFFFFF', '#FF5A5F'];
+const clbStageKey = (easy) => easy ? 'clbStageE' : 'clbStageT';
+function clbSolvable(L) {
+  const n = L.ledges.length, adj = Array.from({ length: n }, () => []);
+  const byId = {}; for (const [li, , id] of L.doors) (byId[id] = byId[id] || []).push(li);
+  for (const ls of Object.values(byId)) if (ls.length === 2) { adj[ls[0]].push(ls[1]); adj[ls[1]].push(ls[0]); }
+  for (const [t, b] of L.ladders) { adj[t].push(b); adj[b].push(t); }
+  const seen = new Set([0]), todo = [0];
+  while (todo.length) for (const v of adj[todo.pop()]) if (!seen.has(v)) { seen.add(v); todo.push(v); }
+  return seen.has(L.goal[0]);
+}
+function clbTry(easy, stage, seed) {
+  const q = rng((easy ? 4100 : 7300) + stage * 101 + seed * 7);
+  const T = easy ? 4 + (stage > 2 ? 1 : 0) : 5 + (stage > 2 ? 1 : 0), R = (easy ? 4 : 6) + stage;
+  const trees = []; for (let i = 0; i < T; i++) trees.push(50 + i * 85);
+  const W = 100 + (T - 1) * 85, H = 140 + R * 95, fy = H - 30;
+  const ledges = [[6, W - 6, fy]], used = [[]], doors = [], ladders = [], acorns = [], cols = {}, mains = [0];
+  const maxPairs = easy ? 7 : 9; let pairs = 0;
+  const pick = (a) => a[(q() * a.length) | 0];
+  const span = (c, wide) => [trees[c] - 38, trees[Math.min(T - 1, c + (wide ? 1 : 0))] + 38];
+  const slot = (li, gap = 30) => { const [x0, x1] = ledges[li], o = []; for (let x = x0 + 16; x <= x1 - 16; x += 3) if (used[li].every(u => Math.abs(u - x) >= gap)) o.push(x); return o.length ? pick(o) : null; };
+  const pair = (a, b) => {
+    if (pairs >= maxPairs || a === b) return false;
+    const xa = slot(a); if (xa == null) return false; used[a].push(xa);
+    const xb = slot(b); if (xb == null) { used[a].pop(); return false; }
+    used[b].push(xb); const id = 'g' + pairs; cols[id] = CLB_PAL[pairs++]; doors.push([a, xa, id], [b, xb, id]); return true;
+  };
+  const ladder = (lo, hi) => {
+    const x0 = Math.max(ledges[lo][0], ledges[hi][0]) + 14, x1 = Math.min(ledges[lo][1], ledges[hi][1]) - 14, o = [];
+    for (let x = x0; x <= x1; x += 3) if (used[lo].every(u => Math.abs(u - x) >= 24) && used[hi].every(u => Math.abs(u - x) >= 24)) o.push(x);
+    if (!o.length) return false; const x = pick(o); ladders.push([hi, lo, x]); used[lo].push(x); used[hi].push(x); return true;
+  };
+  const addLedge = (x0, x1, y) => { ledges.push([Math.max(6, x0), Math.min(W - 6, x1), y]); used.push([]); return ledges.length - 1; };
+  // the way up: one main branch per row, joined to the one below by a ladder or a pair of doors
+  let prevCol = (q() * T) | 0;
+  for (let r = 1; r <= R; r++) {
+    const y = fy - r * 95, wantLadder = q() < (easy ? 0.45 : 0.3) || pairs >= maxPairs - 1;
+    let col = prevCol; if (!wantLadder && T > 1) while (col === prevCol) col = (q() * T) | 0;
+    const [x0, x1] = span(col, q() < 0.3 && col < T - 1), li = addLedge(x0, x1, y), below = mains[r - 1];
+    if (!(wantLadder && ladder(below, li)) && !pair(below, li) && !ladder(below, li)) return null;
+    mains.push(li); prevCol = col;
+  }
+  // tricks: doors that drop you back down, and side branches that are dead ends (with an acorn for your trouble)
+  for (let r = 2; r < R; r++) if (q() < (easy ? 0.3 : 0.55)) pair(mains[r], mains[Math.max(0, r - 2 - ((q() * 2) | 0))]);
+  for (let r = 1; r < R; r++) {
+    if (pairs >= maxPairs || q() > (easy ? 0.5 : 0.8)) continue;
+    const m = ledges[mains[r]], free = [];
+    for (let c = 0; c < T; c++) { const [a, b] = span(c, false); if (b < m[0] - 6 || a > m[1] + 6) free.push(c); }
+    if (!free.length) continue;
+    const [a, b] = span(pick(free), false), li = addLedge(a, b, m[2]);
+    if (!pair(mains[r - 1], li)) { ledges.pop(); used.pop(); continue; }
+    const ax = slot(li, 22); if (ax != null) { used[li].push(ax); acorns.push([li, ax]); }
+  }
+  const top = mains[R], gx = slot(top, 28); if (gx == null) return null; used[top].push(gx);
+  for (let r = 1; r < R; r += 2) { const ax = slot(mains[r], 22); if (ax != null) { used[mains[r]].push(ax); acorns.push([mains[r], ax]); } }
+  { const ax = slot(0, 22); if (ax != null) acorns.push([0, ax]); }
+  return { W, H, trees, ledges, doors, ladders, goal: [top, gx], cols, acorns };
+}
+function clbGen(easy, stage) {
+  for (let seed = 0; seed < 60; seed++) { const L = clbTry(easy, stage, seed); if (L && clbSolvable(L)) return L; }
+  return CLB_LEVELS[easy ? 'easy' : 'tricky'];
+}
 let clb = null, clbCool = false;
-function clbStart() {
-  const easy = mode !== 'tricky', L = CLB_LEVELS[easy ? 'easy' : 'tricky'];
-  const C = clb = { L, easy, ledge: 0, x: 24, y: L.ledges[0][2], face: 'side', moving: false, target: null, act: null, t: 0, seen: {}, won: false, parts: [], back: cur };
+function clbStart(ret, stage) {
+  const easy = mode !== 'tricky', prev = clb;
+  if (!stage) stage = Math.max(1, Math.min(CLB_STAGES, store.get(clbStageKey(easy), 1) | 0 || 1));
+  const L = stage === 1 ? CLB_LEVELS[easy ? 'easy' : 'tricky'] : clbGen(easy, stage);
+  const C = clb = { L, easy, stage, ledge: 0, x: 24, y: L.ledges[0][2], face: 'side', moving: false, target: null, act: null, t: 0, seen: {}, won: false, parts: [], got: 0,
+    ret: ret || (prev && prev.ret) || { map: cur, entry: 'town', x: CLB_DOOR.x, y: CLB_DOOR.y + 14 } };
   C.ledges = L.ledges.map(([x0, x1, y]) => ({ x0, x1, y }));
   C.doors = L.doors.map(([li, x, id], i) => ({ i, li, x, id, col: L.cols[id], glow: 0 }));
   C.doors.forEach(d => d.to = C.doors.find(o => o !== d && o.id === d.id));
   C.ladders = L.ladders.map(([top, bot, x]) => ({ top, bot, x }));
   C.goal = { li: L.goal[0], x: L.goal[1], y: L.ledges[L.goal[0]][2] };
+  C.acorns = (L.acorns || []).map(([li, x]) => ({ li, x, got: false }));
   clbBake(C);
-  C.hidden = ['hudL', 'tracker', 'stars', 'coins', 'dashBtn', 'atkBtn', 'swapBtn', 'powBtn', 'powSwap', 'bossBar', 'decoBtn', 'fishBtn', 'fishBar'].filter(id => $(id) && !$(id).hidden);
-  C.hidden.forEach(id => $(id).hidden = true);
+  if (prev && prev.hidden) C.hidden = prev.hidden;
+  else { C.hidden = ['hudL', 'tracker', 'stars', 'coins', 'dashBtn', 'atkBtn', 'swapBtn', 'powBtn', 'powSwap', 'bossBar', 'decoBtn', 'fishBtn', 'fishBar'].filter(id => $(id) && !$(id).hidden); C.hidden.forEach(id => $(id).hidden = true); }
   clbExitBtn().hidden = false;
   state = 'climb'; hero.path = []; marker = null;
-  C.camX = 0; C.camY = C.L.H - VH;
-  toast(easy ? 'Every door takes you to another tree. Doors with the same colour go together. Climb up to the Sky Star!' : 'Every door takes you to another tree. A door shows its colour once you go through it. Can you reach the Sky Star at the top?');
+  // start up by the Sky Star so you can see where you're going, then the camera slides down to you
+  C.camX = 0; C.camY = 0;
+  if (stage === 1) toast(easy ? 'Climbing Trees, stage 1 of 3! Every door takes you to another tree. Doors with the same colour go together. Climb up to the Sky Star!' : 'Climbing Trees, stage 1 of 3! Every door takes you to another tree. A door shows its colour once you go through it. Can you reach the Sky Star?');
+  else toast('Stage ' + stage + ' of 3: even taller trees! ' + (easy ? 'Follow the colours up to the Sky Star.' : 'Watch out for doors that take you back down!'));
 }
 function clbExitBtn() {
   let b = $('clbExit');
@@ -9859,19 +9932,24 @@ function clbExitBtn() {
   return b;
 }
 function clbLeave() {
-  if (!clb) return;
-  const C = clb;
+  if (!clb || state !== 'climb') return;
+  const C = clb, R = C.ret;
   state = 'fade'; $('fade').classList.add('on');
   setTimeout(() => {
     clbExitBtn().hidden = true;
     C.hidden.forEach(id => $(id).hidden = false);
     clb = null;
-    enterMap(C.back, 'town');
-    hero.x = CLB_DOOR.x; hero.y = CLB_DOOR.y + 14; hero.face = 'down'; clbCool = true;
+    enterMap(R.map, R.entry);
+    hero.x = R.x; hero.y = R.y; hero.face = 'down'; clbCool = true;
     snapCam(); $('fade').classList.remove('on');
     setTimeout(() => { if (state === 'fade') state = 'play'; }, 200);
-    if (C.won) clbPrize(C);
+    if (C.won && C.stage >= CLB_STAGES) clbPrize(C);
+    else if (C.stage > 1 || C.won) setTimeout(() => toast('Come back any time to keep climbing from stage ' + store.get(clbStageKey(C.easy), 1) + '!'), 400);
   }, 260);
+}
+function clbNext(C) {
+  state = 'fade'; $('fade').classList.add('on');
+  setTimeout(() => { clbStart(C.ret, C.stage + 1); $('fade').classList.remove('on'); }, 300);
 }
 function clbPrize(C) {
   const firstE = C.easy && !flags.climb_done, firstT = !C.easy && !flags.climb_tricky;
@@ -9946,7 +10024,7 @@ function clbBake(C) {
     for (let x = L.x0 + 2; x < L.x1 - 1; x++) px(c, x, y - 8 + Math.round(Math.sin((x - L.x0) / 12 * Math.PI) * 2), 1, 1, '#E8D49A');
     for (let x = L.x0; x < L.x1; x += 3) if (q() < 0.4) px(c, x, y + 7, 2, 1 + ((q() * 3) | 0), '#3E8C4A');
     // a few things on the decks: pots, barrels, a lantern
-    for (let k = 0; k < 2; k++) { const ox = L.x0 + 6 + q() * (L.x1 - L.x0 - 12); if (C.doors.some(d => d.li === li && Math.abs(d.x - ox) < 14) || (C.goal.li === li && Math.abs(C.goal.x - ox) < 16)) continue;
+    for (let k = 0; k < 2; k++) { const ox = L.x0 + 6 + q() * (L.x1 - L.x0 - 12); if (C.doors.some(d => d.li === li && Math.abs(d.x - ox) < 14) || (C.goal.li === li && Math.abs(C.goal.x - ox) < 16) || C.ladders.some(l => (l.top === li || l.bot === li) && Math.abs(l.x - ox) < 10) || C.acorns.some(a => a.li === li && Math.abs(a.x - ox) < 9)) continue;
       if (q() < 0.5) { px(c, ox - 4, y - 8, 8, 8, OUT); px(c, ox - 3, y - 7, 6, 7, '#A06A3A'); px(c, ox - 3, y - 5, 6, 1, '#6B4038'); px(c, ox - 3, y - 2, 6, 1, '#6B4038'); }
       else { px(c, ox - 3, y - 6, 6, 6, '#C86A3A'); px(c, ox - 2, y - 9, 4, 3, '#3E9E4E'); px(c, ox - 1, y - 11, 2, 2, '#FF9ACB'); } }
   });
@@ -9962,7 +10040,7 @@ function clbBake(C) {
   for (const ld of C.ladders) { const y0 = C.ledges[ld.top].y, y1 = C.ledges[ld.bot].y; for (const lx of [ld.x - 5, ld.x + 4]) px(c, lx, y0 - 2, 1, y1 - y0 + 2, '#E8D49A'); for (let y = y0 + 4; y < y1; y += 6) px(c, ld.x - 5, y, 10, 2, '#B5835A'); }
   C.cv = cv;
   // floating leaves and fireflies
-  C.motes = []; for (let i = 0; i < 40; i++) C.motes.push({ x: q() * W, y: q() * H, s: 4 + q() * 8, p: q() * 6, col: q() < 0.5 ? '#B9FF6B' : '#FFE9A8' });
+  C.motes = []; for (let i = 0; i < Math.round(40 * H / 560); i++) C.motes.push({ x: q() * W, y: q() * H, s: 4 + q() * 8, p: q() * 6, col: q() < 0.5 ? '#B9FF6B' : '#FFE9A8' });
 }
 // ---------------------------------------------------------------- moving about
 const CLB_SPEED = 60;
@@ -9998,6 +10076,7 @@ function updateClimb(dt) {
     if ((keys.has('arrowup') || keys.has('w')) && !C.upHeld) { C.upHeld = true; clbUse(C, -1); }
     else if ((keys.has('arrowdown') || keys.has('s')) && !C.upHeld) { C.upHeld = true; clbUse(C, 1); }
     if (!keys.has('arrowup') && !keys.has('w') && !keys.has('arrowdown') && !keys.has('s')) C.upHeld = false;
+    for (const a of C.acorns) if (!a.got && a.li === C.ledge && Math.abs(a.x - C.x) < 7) { a.got = true; C.got++; sqCoins(2); tone(880, 0.1, 'square', 0.05, 1320); clbBurst(C, a.x, C.y - 8, '#FFD23F'); }
     // the Sky Star
     if (!C.won && C.ledge === C.goal.li && Math.abs(C.x - C.goal.x) < 10) clbWin(C);
   }
@@ -10036,8 +10115,16 @@ function clbBurst(C, x, y, col) { for (let i = 0; i < 16; i++) { const a = Math.
 function clbWin(C) {
   C.won = true; sfx.win(); if (typeof confetti === 'function') confetti();
   clbBurst(C, C.goal.x, C.goal.y - 20, '#FFD23F'); clbBurst(C, C.goal.x, C.goal.y - 20, '#FF9ACB');
-  toast('You reached the Sky Star!');
-  setTimeout(() => { if (clb === C) clbLeave(); }, 1800);
+  if (C.stage < CLB_STAGES) {
+    store.set(clbStageKey(C.easy), C.stage + 1);
+    sqCoins(5);
+    toast('Sky Star! +5 coins. Now even higher: stage ' + (C.stage + 1) + ' of 3!');
+    setTimeout(() => { if (clb === C) clbNext(C); }, 2000);
+  } else {
+    store.set(clbStageKey(C.easy), 1);
+    toast('You reached the very top of the Climbing Trees!');
+    setTimeout(() => { if (clb === C) clbLeave(); }, 2000);
+  }
 }
 // ---------------------------------------------------------------- drawing
 function drawClimb() {
@@ -10068,6 +10155,14 @@ function drawClimb() {
     ctx.fillStyle = '#FFD23F';
     for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / 5; for (let r = 0; r < 8; r++) ctx.fillRect(Math.round(X + Math.cos(a) * r) - 1, Math.round(Y + Math.sin(a) * r) - 1, 3, 3); }
     ctx.fillStyle = '#FFFFFF'; ctx.fillRect(X - 1, Y - 1, 3, 3); }
+  // golden acorns
+  for (const a of C.acorns) {
+    if (a.got) continue;
+    const X = Math.round(a.x - cx), Y = Math.round(C.ledges[a.li].y - cy - 9 - Math.abs(Math.sin(C.t * 3 + a.x)) * 2);
+    if (X < -10 || X > VW + 10 || Y < -10 || Y > VH + 10) continue;
+    ctx.fillStyle = OUT; ctx.fillRect(X - 3, Y - 3, 7, 9); ctx.fillStyle = '#7A4A2E'; ctx.fillRect(X - 2, Y - 2, 5, 2); ctx.fillRect(X, Y - 4, 1, 2);
+    ctx.fillStyle = '#FFD23F'; ctx.fillRect(X - 2, Y, 5, 4); ctx.fillRect(X - 1, Y + 4, 3, 1); ctx.fillStyle = '#FFF6A0'; ctx.fillRect(X - 1, Y + 1, 1, 2);
+  }
   // the hero, walking sideways, or climbing
   const s = SPR.hero[heroDef.id], fr = C.moving ? Math.floor(C.t * 9) % 4 : 0;
   let alpha = 1;
@@ -10088,6 +10183,16 @@ function drawClimb() {
   for (const p of C.parts) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x - cx), Math.round(p.y - cy), 2, 2); }
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(vignette, 0, 0);
+  clbMeter(C);
+}
+// how high you are: a little tree-trunk bar on the right with the Sky Star at the top, and one leaf per stage under it
+function clbMeter(C) {
+  const x = VW - 9, y0 = 34, y1 = VH - 30, floor = C.ledges[0].y, k = Math.max(0, Math.min(1, (floor - C.y) / Math.max(1, floor - C.goal.y)));
+  ctx.fillStyle = OUT; ctx.fillRect(x - 3, y0 - 1, 6, y1 - y0 + 2); ctx.fillStyle = '#5A3430'; ctx.fillRect(x - 2, y0, 4, y1 - y0);
+  ctx.fillStyle = '#7CFF6B'; const h = Math.round((y1 - y0) * k); ctx.fillRect(x - 1, y1 - h, 2, h);
+  ctx.fillStyle = '#FFD23F'; ctx.fillRect(x - 3, y0 - 6, 7, 3); ctx.fillRect(x - 1, y0 - 8, 3, 7);
+  const hy = Math.round(y1 - (y1 - y0) * k); ctx.fillStyle = OUT; ctx.fillRect(x - 4, hy - 3, 8, 6); ctx.fillStyle = heroDef.glow || '#FFFFFF'; ctx.fillRect(x - 3, hy - 2, 6, 4);
+  for (let i = 0; i < CLB_STAGES; i++) { const sy = y1 + 7 + i * 7, on = i < C.stage - 1 || (i === C.stage - 1 && C.won); ctx.fillStyle = OUT; ctx.fillRect(x - 3, sy - 1, 6, 6); ctx.fillStyle = on ? '#FFD23F' : i === C.stage - 1 ? '#B9FF6B' : '#3A2A40'; ctx.fillRect(x - 2, sy, 4, 4); }
 }
 // ---------------------------------------------------------------- hooking in: the main loop, taps, and a door in Treetop Village
 const CLB_DOOR = { tx: 17, ty: 17, x: 17 * TS + 8, y: 18 * TS + 4 };
@@ -10116,13 +10221,60 @@ if (typeof buildVillage === 'function') {
   };
   if (typeof SQ_MAPS !== 'undefined' && SQ_MAPS.village) SQ_MAPS.village = buildVillage;
 }
+// A giant climbing tree on the town lawn, east of the rainbow fountain, so nobody has to find the secret village first
+const CLB_TOWN = { tx: 30, ty: 20, x: 30 * TS + 8, y: 21 * TS };
+function clbTownTree(m) {
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), q = rng(4242), X = CLB_TOWN.x, Y = CLB_TOWN.y;
+  m.bushes = m.bushes.filter(b => { const inside = b.tx >= 28 && b.tx <= 32 && b.ty >= 16 && b.ty <= 22; if (inside) setSolid(m, b.tx, b.ty, 0); return !inside; });
+  // roots and a wide trunk going up out of sight
+  pell(c, X, Y + 1, 30, 6, 'rgba(10,6,24,.5)');
+  const x0 = X - 22, w = 44, top = Y - 76;
+  px(c, x0 - 1, top, w + 2, Y - top, OUT); px(c, x0, top, w, Y - top, '#6B4038'); px(c, x0, top, 6, Y - top, '#8A5A44'); px(c, x0 + w - 10, top, 10, Y - top, '#4A2A30');
+  for (let i = 0; i < 22; i++) { const bx = x0 + 3 + ((q() * (w - 6)) | 0), by = top + ((q() * (Y - top - 8)) | 0); px(c, bx, by, 1, 5 + ((q() * 10) | 0), '#4A2A30'); }
+  for (const side of [-1, 1]) for (let k = 0; k < 3; k++) { const rx = X + side * (w / 2 - 4 + k * 5); for (let j = 0; j < 9 - k * 2; j++) px(c, rx + side * j, Y - 7 + j * 0.8 + k, 4, 3, j % 3 ? '#5A3430' : '#6B4038'); }
+  // little tree house decks up the trunk, with a rope ladder between them
+  for (const [dy, dx] of [[-30, -18], [-56, 14]]) { const yy = Y + dy; px(c, X + dx - 13, yy - 1, 26, 5, OUT); px(c, X + dx - 12, yy, 24, 3, '#B5835A'); px(c, X + dx - 12, yy, 24, 1, '#E0B07A'); px(c, X + dx - 10, yy - 9, 20, 9, OUT); px(c, X + dx - 9, yy - 8, 18, 8, '#9A6A45'); px(c, X + dx - 2, yy - 6, 4, 5, '#FFC870'); m.lights.push({ x: X + dx, y: yy - 4, r: 12, col: '#FFC870', a: 0.5, fl: 1 }); }
+  for (const lx of [X + 6, X + 12]) px(c, lx, Y - 56, 1, 26, '#E8D49A'); for (let yy = Y - 52; yy < Y - 30; yy += 5) px(c, X + 6, yy, 7, 1, '#B5835A');
+  // the glowing tree door
+  px(c, X - 9, Y - 22, 18, 22, OUT); px(c, X - 8, Y - 21, 16, 21, '#B9FF6B'); px(c, X - 6, Y - 19, 12, 19, '#5A3426'); px(c, X - 6, Y - 19, 3, 19, '#7A4A34'); px(c, X + 3, Y - 10, 2, 2, '#FFD23F');
+  for (const [dx, dy] of [[-7, -23], [-3, -25], [2, -25], [6, -23]]) px(c, X + dx, Y + dy, 2, 2, '#7CFF6B');
+  // a signpost with an up arrow and a star
+  const sx = X - 34, sy = Y - 2;
+  px(c, sx - 1, sy - 18, 3, 19, OUT); px(c, sx, sy - 17, 1, 17, '#8A5A3A');
+  px(c, sx - 11, sy - 26, 24, 12, OUT); px(c, sx - 10, sy - 25, 22, 10, '#C89A62'); px(c, sx - 10, sy - 25, 22, 1, '#E8C48A');
+  px(c, sx - 6, sy - 23, 1, 6, '#3A2018'); px(c, sx - 8, sy - 21, 5, 1, '#3A2018'); px(c, sx - 7, sy - 22, 3, 1, '#3A2018');
+  ctx_star(c, sx + 5, sy - 20);
+  setSolid(m, Math.floor(sx / TS), Math.floor((sy - 4) / TS));
+  // a big canopy on top (drawn over everyone)
+  const pal = ['#123A26', '#1B5A33', '#287A40', '#3E9E4E', '#7FD46A'];
+  scCanopy(f, q, X, top - 6, 2.6, pal); scCanopy(f, q, X - 26, top + 10, 1.4, pal); scCanopy(f, q, X + 28, top + 8, 1.4, pal);
+  for (let i = 0; i < 8; i++) m.lights.push({ x: X - 40 + q() * 80, y: top - 20 + q() * 40, r: 6, col: i % 2 ? '#B9FF6B' : '#FFF6A0', a: 0.6, fl: 2 });
+  m.lights.push({ x: X, y: Y - 10, r: 26, col: '#B9FF6B', a: 0.7, fl: 2 });
+  for (let tx = 29; tx <= 31; tx++) for (let ty = 16; ty <= 20; ty++) setSolid(m, tx, ty);
+  m.clbTown = true;
+}
+function ctx_star(c, x, y) { px(c, x - 1, y - 3, 3, 7, '#FFD23F'); px(c, x - 3, y - 1, 7, 3, '#FFD23F'); px(c, x, y, 1, 1, '#FFFFFF'); }
+{ const _bo = buildOverworld; buildOverworld = function (...a) { const m = _bo(...a); try { clbTownTree(m); } catch (e) { console.warn(e); } return m; }; }
+function clbTrigger(x, y, ret) {
+  const d = Math.hypot(hero.x - x, hero.y - (y + 10));
+  if (d > 30) clbCool = false;
+  else if (d < 13 && !clbCool) { clbCool = true; sfx.door(); state = 'fade'; $('fade').classList.add('on'); setTimeout(() => { clbStart(ret); $('fade').classList.remove('on'); }, 260); }
+}
+// a bouncing arrow over the town tree door until you've climbed to the top once
+{ const _ad = adventureDrawables; adventureDrawables = function (list) { _ad(list); if (cur === OUTMAP && cur.clbTown && !flags.climb_done) list.push({ y: CLB_TOWN.y + 400, d: (cx, cy) => {
+  const X = Math.round(CLB_TOWN.x - cx), Y = Math.round(CLB_TOWN.y - 33 - cy - Math.abs(Math.sin(clock * 4)) * 3);
+  ctx.fillStyle = OUT; ctx.fillRect(X - 5, Y - 1, 11, 4); ctx.fillRect(X - 3, Y + 3, 7, 3); ctx.fillRect(X - 1, Y + 6, 3, 2);
+  ctx.fillStyle = '#B9FF6B'; ctx.fillRect(X - 4, Y, 9, 2); ctx.fillRect(X - 2, Y + 2, 5, 3); ctx.fillRect(X, Y + 5, 1, 2);
+} }); }; }
 const _clbQuest = updateQuest;
 updateQuest = function (dt) {
   _clbQuest(dt);
-  if (!cur || !cur.clbDoor || state !== 'play') return;
-  const d = Math.hypot(hero.x - CLB_DOOR.x, hero.y - (CLB_DOOR.y + 10));
-  if (d > 30) clbCool = false;
-  else if (d < 13 && !clbCool) { clbCool = true; sfx.door(); state = 'fade'; $('fade').classList.add('on'); setTimeout(() => { clbStart(); $('fade').classList.remove('on'); }, 260); }
+  if (!cur || state !== 'play') return;
+  if (cur.clbDoor) clbTrigger(CLB_DOOR.x, CLB_DOOR.y, { map: cur, entry: 'town', x: CLB_DOOR.x, y: CLB_DOOR.y + 14 });
+  else if (cur === OUTMAP && cur.clbTown) {
+    clbTrigger(CLB_TOWN.x, CLB_TOWN.y - 4, { map: OUTMAP, entry: 'none', x: CLB_TOWN.x, y: CLB_TOWN.y + 16 });
+    if (state === 'play' && !flags.climb_done && Math.hypot(hero.x - CLB_TOWN.x, hero.y - CLB_TOWN.y) < 70) hint('clbtown', 'A glowing door in the giant tree! Walk in to climb the Climbing Trees!');
+  }
 };
 if (typeof TROPHIES !== 'undefined') TROPHIES.push(
   { id: 'climb', name: 'Tree Door Explorer', desc: 'Reach the Sky Star in the Climbing Trees', tier: 'silver', icon: 'star', test: () => !!flags.climb_done },
