@@ -8109,13 +8109,15 @@ drawAttack = function (cx, cy) {
 // ================================================================ secret places, side quests and fishing
 // Treetop Village: hidden up the Great Tree between the 2nd and 3rd houses in town. Smash the sparkly bushes, climb the ladder.
 // Waterfall Grotto: behind sparkly bushes at the east edge of Whisper Woods. Behind the waterfall is the Echo Cavern.
-// Fishing: Fennel the frog by the town stream gives you a pole. Fish in any pond, lake, stream or the sea, and sell fish to Fennel.
+// Fishing: a skill you learn. Once you have your first rainbow shard, Fennel the frog by the town stream teaches you and gives you a pole.
+// Fish in any pond, lake, stream or the sea, and sell fish to Fennel. Big trophy fish sometimes bite: they fight back and are harder to reel in.
 // Side quests: Fennel (catch 3 fish, fill the fish book), Elder Oakley (light the lanterns), Grandma Fern (fish soup),
 // Willow (find baby Bud at the waterfall), Digby the mole (glow stones in the cavern).
 // Everything here hooks in by wrapping existing functions, so other files only need this file added to build.py.
 let sqNpcs = [], sqCool = {}, fishing = null, fishBag = store.get('fishBag', {}), fishSeen = store.get('fishSeen', {}), fishTotal = store.get('fishTotal', 0);
 const hasPole = () => !!flags.pole;
 const goldPole = () => !!flags.fish_book;
+const canLearnFishing = () => shardCount() >= 1; // fishing is a skill Fennel teaches once you have freed your first big ghost
 const sqSaveFish = () => { store.set('fishBag', fishBag); store.set('fishSeen', fishSeen); store.set('fishTotal', fishTotal); };
 const fishCount = () => Object.values(fishBag).reduce((a, b) => a + b, 0);
 const sqTalkD = (x, y) => Math.hypot(hero.x - x, hero.y - y);
@@ -8135,9 +8137,18 @@ const FISH = {
   koi:     { name: 'Crystal Koi', val: 12, body: '#E8F6FF', belly: '#FFFFFF', fin: '#3DF2FF', shape: 'fish', spots: '#FF7A5A' },
   rainbow: { name: 'Rainbow Fin', val: 15, body: '#FF5A5F', belly: '#FFFFFF', fin: '#9B5DE5', shape: 'fish', rainbow: true },
   golden:  { name: 'Golden Gill', val: 30, body: '#FFD23F', belly: '#FFF4B8', fin: '#FFB000', shape: 'fish', gold: true },
+  // trophy fish: big, rare, and they fight back
+  tbass:   { name: 'Thunder Bass', val: 45, body: '#4D96FF', belly: '#D8ECFF', fin: '#FFD23F', shape: 'fish', stripes: '#2E5FC0', trophy: true },
+  tmoss:   { name: 'Old Mossjaw', val: 50, body: '#3E8C4A', belly: '#C8F0A8', fin: '#B9FF6B', shape: 'long', spots: '#1E5A2E', trophy: true },
+  tfrost:  { name: 'Glacier King', val: 55, body: '#BDF4FF', belly: '#FFFFFF', fin: '#3DF2FF', shape: 'fish', spots: '#5FA8E8', crown: true, trophy: true },
+  tmoon:   { name: 'Moon Whiskers', val: 60, body: '#7B6CE0', belly: '#E8E2FF', fin: '#C9BFFF', shape: 'round', star: true, whiskers: true, trophy: true },
   boot:    { name: 'Old Boot', val: 1, junk: true },
 };
-const FISH_BOOK = Object.keys(FISH).filter(k => !FISH[k].junk && k !== 'golden'); // 11 kinds, the golden one is a bonus
+const FISH_BOOK = Object.keys(FISH).filter(k => !FISH[k].junk && !FISH[k].trophy && k !== 'golden'); // 11 kinds, the golden one is a bonus
+const TROPHY_FISH = Object.keys(FISH).filter(k => FISH[k].trophy);
+// which trophy fish lives where
+const TROPHY_WATERS = { town: 'tbass', meadow: 'tbass', cove: 'tbass', woods: 'tmoss', hollow: 'tmoss', falls: 'tmoss', frost: 'tfrost', pond: 'tmoon', cave: 'tmoon' };
+let trophyRec = store.get('trophyFish', {}); // best size caught of each trophy fish, in inches
 // what bites where: [fish, how often]
 const WATERS = {
   town:   [['minnow', 5], ['perch', 4], ['puffer', 2], ['golden', 0.3], ['boot', 1]],
@@ -8151,9 +8162,13 @@ const WATERS = {
   hollow: [['carp', 4], ['guppy', 3], ['minnow', 2], ['golden', 0.3], ['boot', 1]],
 };
 const FISH_WHERE = { minnow: 'almost anywhere', perch: 'Rainbow Town and Sunny Meadow', puffer: 'Sunny Meadow and Coral Cove', carp: 'Whisper Woods', guppy: 'the Firefly Pond and the cavern',
-  trout: 'Frosty Lake', pike: 'Frosty Lake', snapper: 'the waterfall and the sea', moon: 'the Firefly Pond', koi: 'the Echo Cavern', rainbow: 'the hidden waterfall', golden: 'anywhere, if you are very lucky' };
+  trout: 'Frosty Lake', pike: 'Frosty Lake', snapper: 'the waterfall and the sea', moon: 'the Firefly Pond', koi: 'the Echo Cavern', rainbow: 'the hidden waterfall', golden: 'anywhere, if you are very lucky',
+  tbass: 'Rainbow Town, Sunny Meadow and Coral Cove', tmoss: 'Whisper Woods, Glowcap Hollow and the waterfall', tfrost: 'Frosty Lake', tmoon: 'the Firefly Pond and the Echo Cavern' };
 function pickFish() {
   const place = cur === OUTMAP ? 'town' : cur.landId;
+  // a trophy fish? only after Fennel's first lesson (catch 3 fish), and only a few times out of a hundred
+  const big = TROPHY_WATERS[place];
+  if (big && flags.fq1_done && Math.random() < (fishSeen[big] ? 0.06 : 0.09) + (goldPole() ? 0.03 : 0)) return big;
   const tbl = WATERS[place] || [['minnow', 5], ['boot', 1]], tricky = mode === 'tricky';
   const w = tbl.map(([id, n]) => [id, n * (tricky && FISH[id].val >= 8 ? 1.6 : 1) * (goldPole() && FISH[id].val >= 8 ? 1.3 : 1)]);
   let k = Math.random() * w.reduce((a, [, n]) => a + n, 0);
@@ -8163,29 +8178,32 @@ function pickFish() {
 const fishSpr = {};
 function fishSprite(id) {
   if (fishSpr[id]) return fishSpr[id];
-  const F = FISH[id], p = new PB(20, 13);
+  const F = FISH[id], S = F.trophy ? 1.8 : 1, p = new PB(Math.round(20 * S) + 2, Math.round(13 * S) + 2);
   if (F.junk) { // an old boot
     p.rect(7, 1, 6, 8, '#7A4A2E'); p.rect(3, 7, 10, 4, '#7A4A2E'); p.rect(3, 10, 11, 2, '#3A2433'); p.rect(8, 1, 1, 7, '#9A6A45');
     p.rect(7, 1, 6, 1, '#B5835A'); p.set(10, 3, '#E8DDF5'); p.set(10, 5, '#E8DDF5'); p.set(5, 8, '#9A6A45'); p.set(15, 2, '#3BA07C'); p.set(16, 1, '#3BA07C');
     return (fishSpr[id] = p.outline().canvas());
   }
   const col = (x) => F.rainbow ? RAINBOW[Math.min(5, Math.max(0, Math.floor((x - 2) / 2.3)))] : F.body;
-  const rx = F.shape === 'long' ? 7.5 : F.shape === 'round' ? 5 : 6, ry = F.shape === 'slim' ? 2.7 : F.shape === 'long' ? 2.3 : F.shape === 'round' ? 4.6 : 3.6, cx = F.shape === 'round' ? 8 : 8.5, cy = 6.5;
+  const rx = S * (F.shape === 'long' ? 7.5 : F.shape === 'round' ? 5 : 6), ry = S * (F.shape === 'slim' ? 2.7 : F.shape === 'long' ? 2.3 : F.shape === 'round' ? 4.6 : 3.6), cx = S * (F.shape === 'round' ? 8 : 8.5) + (S > 1 ? 1 : 0), cy = S * 6.5 + (S > 1 ? 1 : 0);
   // tail
-  for (let i = 0; i < 4; i++) p.rect(cx + rx - 1 + i, cy - 1 - i, 1, 3 + i * 2, F.fin);
+  const tl = Math.round(4 * S); for (let i = 0; i < tl; i++) p.rect(cx + rx - 1 + i, cy - 1 - Math.round(i / S), 1, 3 + Math.round(i / S) * 2, F.fin);
   // fins
-  p.rect(cx - 1, cy - ry - 1, 4, 1, F.fin); p.rect(cx, cy - ry - 2, 2, 1, F.fin); p.rect(cx, cy + ry, 3, 1, F.fin);
+  p.rect(cx - S, cy - ry - 1, 4 * S, 1, F.fin); p.rect(cx, cy - ry - 2, 2 * S, 1, F.fin); p.rect(cx, cy + ry, 3 * S, 1, F.fin);
+  if (S > 1) { p.rect(cx - S, cy - ry - 3, 3, 1, F.fin); p.rect(cx + 1, cy + ry + 1, 2, 1, F.fin); }
   p.ell(cx, cy, rx, ry, (x) => col(x));
   p.ell(cx, cy + ry * 0.45, rx * 0.8, ry * 0.45, (x) => F.rainbow ? mixHex(col(x), '#FFFFFF', 0.45) : F.belly);
   if (F.shape === 'long') { p.set(cx - rx - 1, cy, F.body); p.set(cx - rx - 2, cy, F.fin); }
   if (F.stripes) for (const x of [cx - 1, cx + 2]) p.rect(x, cy - ry + 1, 1, ry * 2 - 2, F.stripes);
-  if (F.spots) [[cx, cy - 1], [cx + 3, cy], [cx + 1, cy + 1]].forEach(([x, y]) => p.set(x, y, F.spots));
+  if (F.spots) [[cx, cy - 1], [cx + 3, cy], [cx + 1, cy + 1]].forEach(([x, y]) => p.rect(cx + (x - cx) * S, cy + (y - cy) * S, S > 1 ? 2 : 1, S > 1 ? 2 : 1, F.spots));
   if (F.shape === 'round') for (const [x, y] of [[cx - 2, cy - ry - 0.5], [cx + 2, cy - ry - 0.5], [cx + rx, cy - 2], [cx - 1, cy + ry + 0.5]]) p.set(x, y, F.fin);
   if (F.star) { p.set(cx + 1, cy - 1, '#FFFFFF'); p.set(cx, cy, '#FFFFFF'); p.set(cx + 2, cy, '#FFFFFF'); p.set(cx + 1, cy + 1, '#FFFFFF'); }
   if (F.gold) { p.set(cx - 2, cy - 2, '#FFFFFF'); p.set(cx + 2, cy - 2, '#FFFFFF'); p.set(cx + 3, cy - 1, '#FFFFFF'); }
   const ex = Math.round(cx - rx * 0.55);
-  p.rect(ex, cy - 2, 2, 2, '#FFFFFF'); p.set(ex, cy - 1, EYE);
-  p.set(Math.round(cx - rx), cy + 1, mixHex(F.body, '#140C24', 0.5));
+  if (S > 1) { p.rect(ex - 1, cy - 3, 3, 3, '#FFFFFF'); p.rect(ex - 1, cy - 2, 2, 2, EYE); p.rect(Math.round(cx - rx) + 1, cy + 1, 3, 1, mixHex(F.body, '#140C24', 0.5)); }
+  else { p.rect(ex, cy - 2, 2, 2, '#FFFFFF'); p.set(ex, cy - 1, EYE); p.set(Math.round(cx - rx), cy + 1, mixHex(F.body, '#140C24', 0.5)); }
+  if (F.whiskers) for (let i = 0; i < 4; i++) { p.set(cx - rx - i, cy + 2 + (i >> 1), F.fin); p.set(cx - rx - i, cy + 4 + (i >> 1), F.fin); }
+  if (F.crown) { const kx = Math.round(cx - 2); p.rect(kx, cy - ry - 5, 6, 2, '#FFD23F'); p.set(kx, cy - ry - 6, '#FFD23F'); p.set(kx + 3, cy - ry - 7, '#FFD23F'); p.set(kx + 3, cy - ry - 6, '#FFD23F'); p.set(kx + 5, cy - ry - 6, '#FFD23F'); }
   return (fishSpr[id] = p.outline().canvas());
 }
 const fishURL = {};
@@ -8303,7 +8321,7 @@ function sqNpcDrawables(list) {
 }
 
 // ---------------------------------------------------------------- prizes, shown the same way as the other quests
-function sqPrize(title, text, rewards) {
+function sqPrize(title, text, rewards, after) {
   sqHideUI(); fishing = null;
   paused = true; state = 'puzzle';
   const el = $('celebrate');
@@ -8314,7 +8332,7 @@ function sqPrize(title, text, rewards) {
     <p class="endnote">${text}</p><div class="rewards">${items}</div>
     <div class="btns"><button class="big" id="sqOk" aria-label="Keep going">${ICON_NEXT}</button></div></div>`;
   el.hidden = false; sfx.win(); if (typeof confetti === 'function') confetti(); if (typeof musicFanfare === 'function') musicFanfare();
-  $('sqOk').addEventListener('click', () => { el.hidden = true; sfx.tap(); paused = false; last = performance.now(); state = 'play'; });
+  $('sqOk').addEventListener('click', () => { el.hidden = true; sfx.tap(); paused = false; last = performance.now(); state = 'play'; if (after) after(); });
 }
 const SQ_QUESTS = ['fq1_done', 'lant_done', 'soup_done', 'bud_done', 'cave_done'];
 const sqQuestsDone = () => SQ_QUESTS.filter(k => flags[k]).length;
@@ -8327,13 +8345,15 @@ FURN.push(
   { id: 'fishtrophy', name: 'Golden fish trophy', price: 0, w: 1, h: 1, free: true, light: '#FFD23F' },
   { id: 'leaflamp', name: 'Leafling lantern', price: 0, w: 1, h: 1, free: true, light: '#B9FF6B' },
   { id: 'crystal', name: 'Glow crystal', price: 0, w: 1, h: 1, free: true, light: '#3DF2FF' },
+  { id: 'fishplaque', name: 'Trophy fish plaque', price: 0, w: 2, h: 1, free: true, light: '#4D96FF' },
 );
-for (const F of FURN.slice(-3)) FURN_BY[F.id] = F;
+for (const F of FURN.slice(-4)) FURN_BY[F.id] = F;
 {
   const _fs = furnSprite;
   const MINE = {
     fishtrophy(p, B) { p.rect(1, B - 14, 14, 12, '#8A5A3A'); p.rect(2, B - 13, 12, 10, '#B5764A'); p.ell(7, B - 8, 4.5, 2.6, '#FFD23F'); p.rect(11, B - 10, 2, 5, '#FFB000'); p.set(4, B - 9, EYE); p.set(6, B - 10, '#FFFFFF'); p.rect(5, B - 4, 6, 1, '#FFD23F'); },
     leaflamp(p, B) { p.rect(7, B - 18, 2, 18, '#8A5A3A'); p.rect(4, B - 2, 8, 2, '#5A3A2E'); p.ell(8, B - 14, 4.5, 4, '#7CFF6B'); p.ell(8, B - 14, 2.5, 2.5, '#F2FFD0'); p.rect(7, B - 20, 2, 2, '#3E8C4A'); p.ell(5, B - 20, 2, 1, '#7CFF6B'); },
+    fishplaque(p, B) { p.rect(1, B - 18, 30, 15, '#8A5A3A'); p.rect(2, B - 17, 28, 13, '#B5764A'); p.ell(15, B - 11, 9, 4, '#4D96FF'); p.ell(15, B - 9, 7, 2, '#D8ECFF'); for (let i = 0; i < 5; i++) p.rect(23 + i, B - 12 - i, 1, 3 + i * 2, '#FFD23F'); p.rect(12, B - 16, 5, 1, '#FFD23F'); p.rect(9, B - 13, 2, 2, '#FFFFFF'); p.set(9, B - 12, EYE); p.rect(11, B - 4, 10, 2, '#FFD23F'); p.rect(15, B - 3, 2, 3, '#5A3A2E'); },
     crystal(p, B) { p.rect(3, B - 3, 10, 3, '#4B4470'); p.rect(6, B - 18, 4, 15, '#7FE8FF'); p.rect(7, B - 20, 2, 2, '#E8FBFF'); p.rect(3, B - 11, 3, 8, '#C9BFFF'); p.rect(10, B - 13, 3, 10, '#3DF2FF'); p.rect(7, B - 16, 1, 10, '#FFFFFF'); },
   };
   furnSprite = function (id) {
@@ -8358,6 +8378,9 @@ function sqUI() {
   #fishBar { position: fixed; z-index: 6; left: 50%; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); --edge: var(--cyan); padding: 10px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
   #fishBar .fbt { position: relative; width: min(300px, 60vw); height: 26px; background: #120B26; box-shadow: inset 0 0 0 3px #2A2050; }
   #fbZone { position: absolute; top: 3px; bottom: 3px; background: var(--lime); box-shadow: 0 0 10px var(--lime); }
+  @media (max-height: 500px) { #fishBar { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); padding: 6px 12px; gap: 4px; } } /* phones on their side: keep the bar clear of messages */
+  #fishBar.fbBig { --edge: var(--gold); } #fishBar.fbBig #fbZone { background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+  #fishBar.fbBig #fbText { color: var(--gold); }
   #fbMark { position: absolute; top: -6px; width: 8px; height: 38px; margin-left: -4px; background: #fff; box-shadow: 0 0 8px #fff; }
   #fbText { font: 700 clamp(16px, 3vmin, 22px)/1 var(--pixel); text-align: center; }
   #fbHits { display: flex; gap: 6px; } #fbHits i { width: 14px; height: 14px; background: #2A2050; } #fbHits i.on { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
@@ -8399,9 +8422,12 @@ function waterNear() {
   }
   return best;
 }
+// reel: how many taps in the zone, how wide the zone is (0-1), how fast the line swings, how many misses before it gets away
 const FISH_CFG = {
-  easy:   { wait: [1.2, 3.2], bite: 2.0, hits: 1 },
-  tricky: { wait: [1.6, 4.6], bite: 0.95, hits: 2 },
+  easy:   { wait: [1.2, 3.2], bite: 2.0, hits: 1, rareHits: 2, zw: 0.36, rareZw: 0.3, speed: 1.7, rareSpeed: 2.1, miss: 5,
+            big: { hits: 3, zw: 0.26, speed: 2.1, drift: 0, miss: 4, time: 18, bite: 2.6 } },
+  tricky: { wait: [1.6, 4.6], bite: 0.95, hits: 2, rareHits: 3, zw: 0.28, rareZw: 0.2, speed: 2.5, rareSpeed: 3.3, miss: 3,
+            big: { hits: 5, zw: 0.15, speed: 3.0, drift: 0.22, miss: 3, time: 16, bite: 1.3 } },
 };
 function sqFishTap() {
   if (state !== 'play' || !hasPole()) return;
@@ -8418,21 +8444,28 @@ function sqFishTap() {
   }
   const F = fishing;
   if (F.phase === 'bite') {
-    F.fish = pickFish();
-    const rare = FISH[F.fish].val >= 8;
-    if (mode !== 'tricky') { sqCatch(); return; }
-    F.phase = 'reel'; F.t = 0; F.need = rare ? 3 : C.hits; F.zone = rand(0.2, 0.62); F.zw = rare ? 0.2 : 0.28; F.speed = rare ? 3.3 : 2.5;
-    sqFishBar(); tone(880, 0.08, 'square', 0.05); return;
+    if (!F.fish) F.fish = pickFish();
+    const D = FISH[F.fish], rare = D.val >= 8, B = C.big;
+    if (D.junk) { sqCatch(); return; }
+    F.phase = 'reel'; F.t = 0; F.ph = 0; F.big = !!D.trophy;
+    if (F.big) Object.assign(F, { need: B.hits, zw: B.zw, speed: B.speed, drift: B.drift * (Math.random() < 0.5 ? -1 : 1), maxMiss: B.miss, time: B.time });
+    else Object.assign(F, { need: rare ? C.rareHits : C.hits, zw: rare ? C.rareZw : C.zw, speed: rare ? C.rareSpeed : C.speed, drift: 0, maxMiss: C.miss, time: 10 });
+    F.zone = rand(0.15, 0.85 - F.zw);
+    sqFishBar(); tone(880, 0.08, 'square', 0.05);
+    if (F.big) { toast('A TROPHY FISH! Reel it in!'); shake = Math.max(shake || 0, 0.25); }
+    return;
   }
   if (F.phase === 'reel') {
-    const p = 0.5 + 0.5 * Math.sin(F.t * F.speed);
-    if (p >= F.zone && p <= F.zone + F.zw) {
+    if (F.t < 0.25) return; // a tiny pause so the tap that hooked the fish does not count as a miss
+    const p = 0.5 + 0.5 * Math.sin(F.ph);
+    if (p >= F.zone - 0.015 && p <= F.zone + F.zw + 0.015) {
       F.hits++; tone(988 + F.hits * 200, 0.1, 'square', 0.06);
       if (F.hits >= F.need) { sqCatch(); return; }
-      F.zone = rand(0.05, 0.95 - F.zw); F.speed *= 1.12;
+      F.zone = rand(0.05, 0.95 - F.zw); F.speed *= F.big ? 1.08 : 1.12;
     } else {
       F.miss++; sfx.bad();
-      if (F.miss >= 3) { sqLost('The fish wiggled away! Try again!'); return; }
+      if (F.big && F.hits > 0) { F.hits--; toast('The big fish pulled back! Keep going!'); } // a trophy fish fights: a miss lets it swim off a little
+      if (F.miss >= F.maxMiss) { sqLost(F.big ? `The ${FISH[F.fish].name} snapped the line! It is still out there...` : 'The fish wiggled away! Try again!'); return; }
     }
     sqFishBar(); return;
   }
@@ -8442,11 +8475,13 @@ function sqFishTap() {
 function sqFishBar() {
   const F = fishing, bar = $('fishBar');
   if (!F || F.phase !== 'reel') { bar.hidden = true; return; }
-  bar.hidden = false;
+  bar.hidden = false; bar.classList.toggle('fbBig', !!F.big);
+  $('fbText').textContent = F.big ? `Tap in the gold! ${F.need - F.hits} more!` : 'Tap when the line is in the green!';
   $('fbZone').style.left = `calc(3px + ${F.zone * 100}% - ${F.zone * 6}px)`; $('fbZone').style.width = `calc(${F.zw * 100}% - ${F.zw * 6}px)`;
   $('fbHits').innerHTML = Array.from({ length: F.need }, (_, i) => `<i class="${i < F.hits ? 'on' : ''}"></i>`).join('');
 }
 function sqLost(text) { fishing = null; $('fishBar').hidden = true; toast(text); }
+const TROPHY_SIZE = { tbass: [28, 40], tmoss: [34, 52], tfrost: [30, 46], tmoon: [36, 60] };
 function sqCatch() {
   const F = fishing, id = F.fish, D = FISH[id], isNew = !fishSeen[id];
   $('fishBar').hidden = true;
@@ -8455,8 +8490,18 @@ function sqCatch() {
   F.phase = 'caught'; F.t = 0;
   for (let i = 0; i < 16; i++) { const a = Math.random() * Math.PI * 2, s = rand(20, 60); poofs.push({ x: F.bx, y: F.by, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, life: 0.8, col: i % 2 ? '#BDF4FF' : '#3DF2FF' }); }
   if (D.junk) { tone(200, 0.2, 'square', 0.06, 140); tone(160, 0.25, 'square', 0.05, 120, 0.15); toast('An old boot! Silly!'); }
-  else { [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.12, 'square', 0.06, null, i * 0.07)); toast(`You caught a ${D.name}!${isNew ? ' New fish!' : ''}`); }
+  else { [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.12, 'square', 0.06, null, i * 0.07)); if (!D.trophy) toast(`You caught a ${D.name}!${isNew ? ' New fish!' : ''}`); }
   if (id === 'golden') poof(hero.x, hero.y - 30, '#FFD23F');
+  if (D.trophy) {
+    const [a, b] = TROPHY_SIZE[id], size = Math.round(rand(a, b)), first = !trophyRec[id], best = size > (trophyRec[id] || 0);
+    if (best) { trophyRec[id] = size; store.set('trophyFish', trophyRec); }
+    poof(hero.x, hero.y - 30, '#FFD23F'); shake = Math.max(shake || 0, 0.3);
+    if (first) {
+      const firstEver = !furn.includes('fishplaque'); if (firstEver) sqFurn('fishplaque');
+      const rw = [{ img: fishImg(id), b: D.name, t: `${size} inches long!`, edge: '#FFD23F' }]; if (firstEver) rw.push(furnReward('fishplaque'));
+      setTimeout(() => sqPrize('Trophy Fish!', `You reeled in <b class="rb">${D.name}</b>, one of the ${TROPHY_FISH.length} biggest fish in the land! Fennel will want to see this!`, rw), 1300);
+    } else toast(`You caught ${D.name}! ${size} inches${best ? ', a new record!' : '!'}`);
+  }
 }
 function sqUpdateFishing(dt) {
   const btn = $('fishBtn'); if (!btn) return;
@@ -8470,9 +8515,17 @@ function sqUpdateFishing(dt) {
   if (!fishing) return;
   F.t += dt;
   if (F.phase === 'cast' && F.t > 0.4) { F.phase = 'wait'; F.t = 0; tone(260, 0.12, 'triangle', 0.06, 180); }
-  else if (F.phase === 'wait' && F.t > F.wait) { F.phase = 'bite'; F.t = 0; tone(1200, 0.08, 'square', 0.06); tone(1500, 0.1, 'square', 0.06, null, 0.08); for (let i = 0; i < 8; i++) poofs.push({ x: F.bx + rand(-4, 4), y: F.by, vx: rand(-20, 20), vy: rand(-50, -20), life: 0.6, col: '#BDF4FF' }); }
-  else if (F.phase === 'bite' && F.t > (FISH_CFG[mode] || FISH_CFG.easy).bite) { F.phase = 'wait'; F.t = 0; F.wait = rand(1, 2.4); F.missed = (F.missed || 0) + 1; toast(F.missed >= 2 ? 'Tap the fish button when you see the splash!' : 'Too slow! The fish is still there...'); }
-  else if (F.phase === 'reel') { const p = 0.5 + 0.5 * Math.sin(F.t * F.speed); $('fbMark').style.left = `calc(3px + ${p * 100}% - ${p * 6}px)`; if (F.t > 9) sqLost('The fish got tired of waiting!'); }
+  else if (F.phase === 'wait' && F.t > F.wait) {
+    F.phase = 'bite'; F.t = 0; if (!F.fish) F.fish = pickFish(); const big = FISH[F.fish].trophy;
+    tone(1200, 0.08, 'square', 0.06); tone(1500, 0.1, 'square', 0.06, null, 0.08); if (big) { tone(220, 0.3, 'square', 0.06, 110); shake = Math.max(shake || 0, 0.2); }
+    for (let i = 0; i < (big ? 22 : 8); i++) poofs.push({ x: F.bx + rand(-4, 4) * (big ? 2 : 1), y: F.by, vx: rand(-20, 20) * (big ? 1.6 : 1), vy: rand(-50, -20) * (big ? 1.5 : 1), life: 0.6, col: big && i % 3 === 0 ? '#FFD23F' : '#BDF4FF' });
+  }
+  else if (F.phase === 'bite' && F.t > (FISH[F.fish] && FISH[F.fish].trophy ? (FISH_CFG[mode] || FISH_CFG.easy).big.bite : (FISH_CFG[mode] || FISH_CFG.easy).bite)) { F.phase = 'wait'; F.t = 0; F.fish = null; F.wait = rand(1, 2.4); F.missed = (F.missed || 0) + 1; toast(F.missed >= 2 ? 'Tap the fish button when you see the splash!' : 'Too slow! The fish is still there...'); }
+  else if (F.phase === 'reel') {
+    F.ph += dt * F.speed; const p = 0.5 + 0.5 * Math.sin(F.ph); $('fbMark').style.left = `calc(3px + ${p * 100}% - ${p * 6}px)`;
+    if (F.drift) { F.zone += F.drift * dt; if (F.zone < 0.03 || F.zone > 0.97 - F.zw) { F.drift = -F.drift; F.zone = Math.max(0.03, Math.min(0.97 - F.zw, F.zone)); } sqFishBar(); }
+    if (F.t > F.time) sqLost(F.big ? `The ${FISH[F.fish].name} swam away! It is still out there...` : 'The fish got tired of waiting!');
+  }
   else if (F.phase === 'caught' && F.t > 1.6) fishing = null;
 }
 function rodTip() {
@@ -8524,7 +8577,9 @@ function sqDrawMarket() {
     <button class="sq" id="fishClose" aria-label="Leave the market"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v2h2v2h4V6h2V4h4v4h-2v2h-2v4h2v2h2v4h-4v-2h-2v-2h-4v2H8v2H4v-4h2v-2h2v-4H6V8H4z" fill="currentColor"/></svg></button></div>
     <div class="items" id="fishItems"></div>
     <p style="margin:0;text-align:center;font:600 16px/1.2 var(--pixel);color:var(--muted)">Fish book: ${seen} of ${FISH_BOOK.length} kinds${fishSeen.golden ? ' + the Golden Gill!' : ''}</p>
-    <div class="fishbook">${FISH_BOOK.concat(['golden']).map(id => `<img alt="${fishSeen[id] ? FISH[id].name : 'Not caught yet'}" title="${fishSeen[id] ? FISH[id].name : 'Look in ' + FISH_WHERE[id]}" src="${fishSeen[id] ? fishImg(id) : fishShadowImg(id)}">`).join('')}</div></div>`;
+    <div class="fishbook">${FISH_BOOK.concat(['golden']).map(id => `<img alt="${fishSeen[id] ? FISH[id].name : 'Not caught yet'}" title="${fishSeen[id] ? FISH[id].name : 'Look in ' + FISH_WHERE[id]}" src="${fishSeen[id] ? fishImg(id) : fishShadowImg(id)}">`).join('')}</div>
+    ${flags.fq1_done ? `<p style="margin:0;text-align:center;font:600 16px/1.2 var(--pixel);color:var(--gold)">Trophy fish: ${TROPHY_FISH.filter(id => trophyRec[id]).length} of ${TROPHY_FISH.length}</p>
+    <div class="fishbook trophies">${TROPHY_FISH.map(id => `<img style="width:64px" alt="${trophyRec[id] ? FISH[id].name + ', ' + trophyRec[id] + ' inches' : 'Trophy fish not caught yet'}" title="${trophyRec[id] ? FISH[id].name + ': best ' + trophyRec[id] + ' inches' : 'A giant fish lives in ' + FISH_WHERE[id]}" src="${trophyRec[id] ? fishImg(id) : fishShadowImg(id)}">`).join('')}</div>` : ''}</div>`;
   const g = $('fishItems');
   if (have.length > 1) {
     const card = document.createElement('div'); card.className = 'item frame on';
@@ -8544,8 +8599,15 @@ function sqSold(n) { [1320, 1760, 2093].forEach((f, i) => tone(f, 0.08, 'square'
 function sqCloseMarket() { $('fishShop').hidden = true; paused = false; last = performance.now(); state = 'play'; sfx.tap(); }
 function fennelTalk(n) {
   if (!hasPole()) {
-    setFlag('pole'); sfx.win();
-    toast('Fennel: Ribbit! Want to go fishing? Take my spare fishing pole! Stand by the water and tap the fish button.');
+    if (!canLearnFishing()) {
+      toast(pick(['Fennel: Ribbit! Fishing takes a brave and patient hero. Free a big ghost from a castle and win a rainbow shard, then I will teach you!',
+        'Fennel: Shhh, the fish are napping. Come back when you have a rainbow shard, and I will show you how to fish!']));
+      return;
+    }
+    setFlag('pole');
+    sqPrize('New Skill: Fishing!', 'Fennel taught you how to fish! Stand by the water, tap the fish button, wait for the splash, then tap in the green to reel it in. Some giant <b class="rb">trophy fish</b> are hiding out there too!',
+      [{ img: fishImg('perch'), b: 'Fishing pole', t: 'from Fennel the frog' }],
+      () => toast('Fennel: Ribbit! Want to go fishing? Take my spare fishing pole! Stand by the water and tap the fish button.'));
     return;
   }
   if (!flags.fq1_done) {
@@ -8555,6 +8617,13 @@ function fennelTalk(n) {
       return;
     }
     if (!fishCount()) { toast(`Fennel: Catch 3 fish and come show me! You have caught ${fishTotal}. Ponds, lakes and streams are full of them!`); return; }
+  }
+  const newBig = TROPHY_FISH.filter(id => trophyRec[id] && !flags['showed_' + id]);
+  if (newBig.length) {
+    for (const id of newBig) setFlag('showed_' + id);
+    const n = newBig.length * 25; sqCoins(n);
+    sqPrize('Fennel Is Amazed!', `Ribbit! You caught ${newBig.map(id => '<b class="rb">' + FISH[id].name + '</b>').join(' and ')}? I have been trying for years! Here is a bonus for a real trophy fisher.`, [{ coins: n }, ...newBig.map(id => ({ img: fishImg(id), b: FISH[id].name, t: `${trophyRec[id]} inches`, edge: '#FFD23F' }))]);
+    return;
   }
   if (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) {
     setFlag('fish_book'); sqCoins(100); sqFurn('fishtrophy');
@@ -8982,6 +9051,8 @@ if (typeof TROPHIES !== 'undefined') {
     { id: 'falls', name: 'Behind the Waterfall', desc: 'Find the cave behind the hidden waterfall', tier: 'silver', icon: 'drop', test: () => !!flags.cave_found },
     { id: 'fish10', name: 'Gone Fishing', desc: 'Catch 10 fish', tier: 'bronze', icon: 'fish', prog: () => [fishTotal, 10] },
     { id: 'fishbook', name: 'Fish Expert', desc: 'Catch every kind of fish', tier: 'gold', icon: 'fish', prog: () => [FISH_BOOK.filter(id => fishSeen[id]).length, FISH_BOOK.length] },
+    { id: 'bigfish', name: 'Whopper!', desc: 'Reel in a trophy fish', tier: 'silver', icon: 'fish', test: () => TROPHY_FISH.some(id => trophyRec[id]) },
+    { id: 'bigfish4', name: 'Trophy Fisher', desc: 'Reel in all 4 trophy fish', tier: 'gold', icon: 'fish', prog: () => [TROPHY_FISH.filter(id => trophyRec[id]).length, TROPHY_FISH.length] },
     { id: 'helper', name: 'Helping Hand', desc: 'Finish 5 side quests', tier: 'silver', icon: 'heart', prog: () => [sqQuestsDone(), 5] },
   );
 }
@@ -9000,7 +9071,7 @@ const SQ_MAPS = { village: buildVillage, falls: buildFalls, cave: buildCave };
   enterMap = function (m, entry, ...a) {
     const r = _em(m, entry, ...a);
     sqNpcs = m === OUTMAP ? [sqNpc({ spr: 'fennel', x: m.fennel ? m.fennel.x : 29 * TS + 8, y: m.fennel ? m.fennel.y : 25 * TS + 12, reach: 18, talk: fennelTalk, draw: fennelDraw,
-        mark: () => !hasPole() || (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]
+        mark: () => !hasPole() ? (canLearnFishing() ? ['!', '#7CFF6B'] : null) : (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) || TROPHY_FISH.some(id => trophyRec[id] && !flags['showed_' + id]) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]
       : m.landId === 'village' ? villageNpcs() : m.landId === 'falls' ? fallsNpcs() : m.landId === 'cave' ? caveNpcs() : [];
     fishing = null; if ($('fishBar')) $('fishBar').hidden = true;
     if (m.landId === 'village') { lantNext = 0; while (lantNext < 6 && lantLit(lantNext)) lantNext++; }
@@ -9021,7 +9092,7 @@ const SQ_MAPS = { village: buildVillage, falls: buildFalls, cave: buildCave };
 }
 // the first time you play, OUTMAP was built before Fennel was set up: give him a place in town too
 function sqEnsureTownNpcs() { if (cur === OUTMAP && !sqNpcs.length && OUTMAP.fennel) enterMapNpcsOnly(); }
-function enterMapNpcsOnly() { sqNpcs = [sqNpc({ spr: 'fennel', x: OUTMAP.fennel.x, y: OUTMAP.fennel.y, reach: 18, talk: fennelTalk, draw: fennelDraw, mark: () => !hasPole() || (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]; }
+function enterMapNpcsOnly() { sqNpcs = [sqNpc({ spr: 'fennel', x: OUTMAP.fennel.x, y: OUTMAP.fennel.y, reach: 18, talk: fennelTalk, draw: fennelDraw, mark: () => !hasPole() ? (canLearnFishing() ? ['!', '#7CFF6B'] : null) : (!flags.fq1_done && fishTotal >= 3) || (!flags.fish_book && FISH_BOOK.every(id => fishSeen[id])) || TROPHY_FISH.some(id => trophyRec[id] && !flags['showed_' + id]) ? ['!', '#7CFF6B'] : ['$', '#FFD23F'] })]; }
 
 function updateSide(dt) {
   sqUI(); sqEnsureTownNpcs();
