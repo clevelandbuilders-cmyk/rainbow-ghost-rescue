@@ -390,7 +390,7 @@
   <h1 id="titleName" class="tname"></h1>
   <div class="tghosts" id="titleGhosts"></div>
   <p class="ttap">Tap to start</p>
-  <p class="tver">version 20</p>
+  <p class="tver">version 21</p>
 </div>
 
 <div class="hud tl" id="hudL" hidden>
@@ -6872,16 +6872,25 @@ function openStation() {
   };
   el.innerHTML = `<div class="panel"><h2 class="glowtext">Rainbow Express</h2>
     <p class="endnote">${trProg.done ? 'You saved the train! Ride again and find every <b class="rb">golden ticket</b>.' : 'The Gloom Conductor stole the train! Go car by car to the engine and stop him.'}</p>
-    <div class="trpick">${TR_CARS.map(car).join('')}</div>
+    <div class="trpick">${TR_CARS.map(car).join('')}${trProg.done && typeof goToIsle === 'function' ? `<button class="frame" id="trIsle" style="--edge:#C9BFFF" aria-label="Go straight to Moonspire Isle"><img alt="" src="${trIsleIcon()}"><span>Moonspire Isle</span></button>` : ''}</div>
     <div class="btns"><button class="big alt" id="trStay" aria-label="Stay in town">${ICON_HOME}</button><button class="big" id="trGo" aria-label="All aboard">${ICON_NEXT}</button></div></div>`;
   el.hidden = false;
   paused = true;
   const go = (k) => { sfx.good(); el.hidden = true; paused = false; last = performance.now(); startTrain(k); };
   el.querySelectorAll('[data-car]').forEach(b => b.addEventListener('click', () => go(+b.dataset.car)));
   $('trGo').addEventListener('click', () => go(Math.min(trProg.reached, TR_CARS.length - 1)));
+  if ($('trIsle')) $('trIsle').addEventListener('click', () => { sfx.good(); el.hidden = true; paused = false; last = performance.now(); state = 'play'; [587, 740, 880].forEach((f, i) => tone(f, 0.7, 'triangle', 0.05, null, i * 0.02)); travel('isle', 'train'); });
   $('trStay').addEventListener('click', () => { sfx.tap(); el.hidden = true; paused = false; last = performance.now(); state = 'play'; });
 }
 const trIconCache = {};
+function trIsleIcon() {
+  if (trIconCache.isle) return trIconCache.isle;
+  const c = mk(48, 26), x = c.getContext('2d');
+  px(x, 0, 18, 48, 8, '#2E6FB0'); pell(x, 24, 19, 20, 5, '#2E5E4A');
+  for (const [cx0, h] of [[12, 12], [36, 12], [24, 17]]) { px(x, cx0 - 4, 18 - h, 8, h, OUT); px(x, cx0 - 3, 19 - h, 6, h - 1, '#A39AD0'); for (let i = 0; i < 7; i++) px(x, cx0 - Math.round(i * 0.7) - 1, 12 - h + i, Math.round(i * 1.4) + 2, 1, '#3D5BC9'); px(x, cx0 - 1, 22 - h, 2, 3, '#FFC870'); }
+  px(x, 16, 10, 16, 8, OUT); px(x, 17, 11, 14, 7, '#A39AD0'); px(x, 23, 13, 2, 5, '#140C24'); pell(x, 41, 4, 3, 3, '#FFF1A8');
+  return trIconCache.isle = c.toDataURL();
+}
 function trCarIcon(k) {
   if (trIconCache[k]) return trIconCache[k];
   const D = TR_CARS[k], c = mk(48, 26), x = c.getContext('2d');
@@ -6947,14 +6956,15 @@ function closeTrainUI() {
   $('bossBar').hidden = true;
   train = null;
 }
-function leaveTrain() {
+function leaveTrain(dest) {
   if (!train) return;
   state = 'fade';
   $('fade').classList.add('on');
   setTimeout(() => {
     closeTrainUI();
     hero.hp = hero.maxHp; drawHearts();
-    enterMap(OUTMAP, 'station'); stationCool = true;
+    if (dest === 'isle' && typeof goToIsle === 'function') goToIsle();
+    else { enterMap(OUTMAP, 'station'); stationCool = true; }
     snapCam(); $('fade').classList.remove('on');
     setTimeout(() => { if (state === 'fade') state = 'play'; }, 200);
   }, 260);
@@ -7736,12 +7746,12 @@ function trResult() {
   const el = $('celebrate');
   el.innerHTML = `<div class="panel"><h2 class="glowtext">Welcome to Moonspire Isle!</h2>
     <div class="pics"><img alt="" class="px hop" src="${SPR.heroURL[heroDef.id]}"><img alt="" class="px dance" style="--gc:#C9BFFF" src="${TRS.friendURL}"></div>
-    <p class="endnote">You saved the <b class="rb">Rainbow Express</b>! The Conductor is happy again. Up the hill, the Starlight Castle is waiting... its gates open in the next chapter!</p>
+    <p class="endnote">You saved the <b class="rb">Rainbow Express</b>! The Conductor is happy again. Up the hill, the Starlight Castle is waiting. Go and explore the island!</p>
     <div class="rewards"><div class="reward frame"><span class="coin"></span><div><b>+${gain}</b>coins</div></div><div class="reward frame" style="--edge:#FFD23F"><img class="px" alt="" src="${TRS.ticket.toDataURL()}"><div><b>${all} of 15</b>golden tickets</div></div>${extra}</div>
-    <div class="btns"><button class="big alt" id="trAgain" aria-label="Ride the train again">${ICON_AGAIN}</button><button class="big" id="trHome" aria-label="Ride back to town">${ICON_NEXT}</button></div></div>`;
+    <div class="btns"><button class="big alt" id="trAgain" aria-label="Ride the train again">${ICON_AGAIN}</button><button class="big" id="trHome" aria-label="Explore Moonspire Isle">${ICON_NEXT}</button></div></div>`;
   el.hidden = false;
   $('trAgain').addEventListener('click', () => { sfx.tap(); el.hidden = true; const hid = train.hidden; closeTrainUI(); hid.forEach(id => $(id).hidden = true); startTrain(0); train.hidden = hid; });
-  $('trHome').addEventListener('click', () => { sfx.tap(); el.hidden = true; leaveTrain(); });
+  $('trHome').addEventListener('click', () => { sfx.tap(); el.hidden = true; leaveTrain('isle'); });
 }
 if (typeof addMusicRule === 'function') {
   addMusicRule(() => state === 'train' ? 'train' : null);
@@ -9034,6 +9044,1131 @@ function sideLights(cx, cy) {
   }
   ctx.globalAlpha = 1;
 }
+
+// ================================================================ Phase 2, stage 2: Moonspire Isle, the land at the end of the train ride
+// The Rainbow Express stops at Moonspire Station. North of it is a wizardly village around a moon fountain,
+// outlying cottages (a windmill, a pumpkin patch, a star tower, a greenhouse, a boathouse on the lake),
+// and at the top of the island the huge Starlight Castle and its gardens.
+// East of the village is the Moonlit Graveyard: friendly and sleepy, with Old Mossy and the Wisp Round-Up game.
+// Side quests: Mrs. Pip's lost letters (Owl Post), Madame Purrkins' moon potion, and Old Mossy's wisps.
+// Help all three and Barnaby opens the castle gates to the Great Hall, where Headmistress Hootley thanks you.
+// Everything hooks in by wrapping functions, like sidequests.js, so other files only need this file in build.py.
+const ISLE = { w: 60, h: 46 };
+const isleEasy = () => mode !== 'tricky';
+const ISLE_QUESTS = ['pip_done', 'potion_done', 'wisp_done'];
+const isleDone = () => ISLE_QUESTS.filter(k => flags[k]).length;
+
+// ---------------------------------------------------------------- villagers and things, drawn in code
+const ISP = {};
+function isleSprites() {
+  if (ISP.ok) return; ISP.ok = true;
+  const dk = (c, k = 0.3) => mixHex(c, '#000000', k), lt = (c, k = 0.3) => mixHex(c, '#FFFFFF', k);
+  // owls: Mrs. Pip the post owl, and Headmistress Hootley (a snowy owl in a tall hat)
+  const owl = (f, body, belly, kind) => {
+    const p = new PB(24, 30), o = 6;
+    p.ell(12, 20 + o - 6, 8, 8.5, body); p.ell(12, 22 + o - 6, 5, 6, belly);
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { p.set(9 + i * 3, 19 + j * 2 + o - 6, dk(belly, 0.18)); p.set(10 + i * 3, 20 + j * 2 + o - 6, dk(belly, 0.18)); }
+    p.ell(12, 12 + o - 6 + 6, 7.5, 6.5, body);
+    p.rect(5, 6 + o, 3, 3, body); p.rect(16, 6 + o, 3, 3, body); p.set(5, 5 + o, body); p.set(18, 5 + o, body);
+    if (kind === 'pip') { p.ell(9, 12 + o, 3.8, 3.8, '#FFD23F'); p.ell(15, 12 + o, 3.8, 3.8, '#FFD23F'); p.rect(12, 12 + o, 1, 1, '#FFD23F'); }
+    p.ell(9, 12 + o, 3, 3, '#FFFFFF'); p.ell(15, 12 + o, 3, 3, '#FFFFFF');
+    if (f) { p.rect(8, 12 + o, 3, 1, EYE); p.rect(14, 12 + o, 3, 1, EYE); } else { p.rect(9, 11 + o, 2, 2, EYE); p.rect(15, 11 + o, 2, 2, EYE); p.set(9, 11 + o, '#FFFFFF'); p.set(15, 11 + o, '#FFFFFF'); }
+    p.rect(11, 14 + o, 3, 1, '#FF9F1C'); p.set(12, 15 + o, '#E07A10');
+    p.ell(4.5, 21 + o - 6 + (f ? -1 : 0), 2.5, 5, dk(body, 0.2)); p.ell(19.5, 21 + o - 6, 2.5, 5, dk(body, 0.2));
+    p.rect(9, 29, 2, 1, '#FF9F1C'); p.rect(14, 29, 2, 1, '#FF9F1C');
+    if (kind === 'pip') { p.rect(15, 20, 6, 5, '#8A5A3A'); p.rect(15, 20, 6, 1, '#B5835A'); p.set(17, 22, '#FFD23F'); for (let i = 0; i < 6; i++) p.set(9 + i, 14 + i + 4 - 4 + 2, '#5A3A2E'); p.rect(4, 4, 16, 2, '#2F5BD9'); p.rect(7, 2, 10, 2, '#2F5BD9'); p.set(12, 3, '#FFD23F'); }
+    if (kind === 'hoot') {
+      p.rect(3, 6, 18, 2, '#5B2A9E'); for (let i = 0; i < 7; i++) p.rect(8 + (i > 4 ? 1 : 0), -1 + i, 8 - i, 1, '#6E36B8');
+      p.rect(9, 0, 4, 1, '#6E36B8'); p.rect(8, 5, 8, 1, '#FFD23F'); p.set(11, 2, '#FFD23F'); p.set(12, 3, '#FFF1A8');
+      p.rect(10, 25, 4, 2, '#C9BFFF'); p.set(11, 25, '#FFFFFF');
+    }
+    return p.outline().canvas();
+  };
+  SQS.pip = [owl(0, '#A0704A', '#F0D8B0', 'pip'), owl(1, '#A0704A', '#F0D8B0', 'pip')];
+  SQS.hoot = [owl(0, '#EEF2FF', '#FFFFFF', 'hoot'), owl(1, '#EEF2FF', '#FFFFFF', 'hoot')];
+  // Madame Purrkins: a ginger cat in a starry witch hat
+  const cat = (f) => {
+    const p = new PB(26, 32), fur = '#F2A65A', robe = '#2BB3A3', hat = '#7B3FE4';
+    for (let y = 19; y < 31; y++) { const hw = 4 + (y - 19) * 0.45; p.rect(Math.round(13 - hw), y, Math.round(hw * 2), 1, y % 4 === 0 ? dk(robe, 0.12) : robe); }
+    p.rect(9, 19, 8, 1, '#FFD23F'); p.set(13, 23, '#FFD23F'); p.set(13, 26, '#FFD23F');
+    p.ell(13, 15, 6.5, 5.5, fur); p.ell(13, 17, 3.5, 2.5, '#FFF1DE');
+    p.rect(7, 9, 3, 3, fur); p.rect(16, 9, 3, 3, fur); p.set(8, 10, '#FF9AB0'); p.set(17, 10, '#FF9AB0');
+    p.rect(10, 13, 2, 2, '#4FD18B'); p.rect(15, 13, 2, 2, '#4FD18B'); p.set(10, 13, '#FFFFFF'); p.set(15, 13, '#FFFFFF'); if (f) { p.rect(10, 14, 2, 1, EYE); p.rect(15, 14, 2, 1, EYE); } else { p.set(11, 14, EYE); p.set(16, 14, EYE); }
+    p.set(13, 16, '#FF7FA0'); p.rect(12, 17, 3, 1, dk(fur, 0.4));
+    for (const [x, y] of [[5, 15], [4, 17], [21, 15], [22, 17]]) p.set(x, y, '#FFFFFF');
+    p.rect(3, 9, 20, 2, hat); p.rect(6, 8, 14, 1, dk(hat, 0.2));
+    for (let i = 0; i < 8; i++) p.rect(9 + Math.floor(i / 3), 7 - i, 8 - Math.floor(i * 0.9), 1, i === 1 ? '#FFD23F' : hat);
+    p.rect(17, -1, 3, 2, hat); p.set(20, 0, hat); p.set(12, 4, '#FFD23F'); p.set(15, 2, '#FFF1A8'); p.set(10, 6, '#FFF1A8');
+    const t = f ? 1 : 0; p.rect(20, 24 - t, 2, 5, fur); p.rect(22, 21 - t, 2, 4, fur); p.set(23, 20 - t, dk(fur, 0.2));
+    p.rect(6, 22, 2, 3, fur); p.rect(18, 22, 2, 3, fur);
+    return p.outline().canvas();
+  };
+  SQS.purr = [cat(0), cat(1)];
+  // Old Mossy: a sleepy, friendly old ghost in a nightcap with a lantern
+  const mossy = (f) => {
+    const p = new PB(26, 30), b = '#C8F5E2', s = '#9FE0C8';
+    p.ell(12, 13, 8, 8, b); p.rect(4, 13, 16, 10, b);
+    for (let i = 0; i < 4; i++) p.ell(6 + i * 4 + (f ? 1 : 0), 23, 2.2, 2.5 + (i % 2), b);
+    p.rect(15, 8, 4, 14, s); p.set(5, 10, '#FFFFFF'); p.set(6, 9, '#FFFFFF');
+    p.rect(8, 13, 3, 1, EYE); p.rect(14, 13, 3, 1, EYE); p.set(7, 12, EYE); p.set(17, 12, EYE);
+    p.rect(10, 16, 5, 1, EYE); p.set(9, 15, EYE); p.set(15, 15, EYE); p.set(7, 15, '#FFB0C8'); p.set(17, 15, '#FFB0C8');
+    p.rect(3, 6, 18, 2, '#3D5BC9'); for (let i = 0; i < 6; i++) p.rect(5 + i, 5 - i, 12 - i * 2 + 2, 1, i % 2 ? '#FFFFFF' : '#3D5BC9');
+    p.rect(14, 0, 4, 2, '#3D5BC9'); p.rect(18, 1, 3, 2, '#3D5BC9'); p.ell(22, 3, 2, 2, '#FFFFFF');
+    p.rect(1, 13, 2, 2, b); const lx = 0, ly = 15 + (f ? 1 : 0);
+    p.rect(lx + 1, ly, 1, 2, '#5A4E80'); p.rect(lx, ly + 2, 4, 5, '#5A4E80'); p.rect(lx + 1, ly + 3, 2, 3, '#FFD23F'); p.set(lx + 1, ly + 3, '#FFFFFF');
+    return p.outline().canvas();
+  };
+  SQS.mossy = [mossy(0), mossy(1)];
+  // bunny apprentices with wands, a hedgehog with a scarf, Bun the badger baker, Barnaby the guard bear
+  const bunny = (f, robe, fur) => {
+    const p = new PB(20, 30);
+    p.rect(6, 2 + f, 2, 9, fur); p.rect(12, 2, 2, 9, fur); p.rect(7, 4 + f, 1, 6, '#FFB0C8'); p.rect(13, 4, 1, 6, '#FFB0C8');
+    p.ell(10, 14, 5.5, 4.8, fur); p.rect(7, 13, 2, 2, EYE); p.rect(12, 13, 2, 2, EYE); p.set(7, 13, '#FFFFFF'); p.set(12, 13, '#FFFFFF'); p.set(10, 16, '#FF7FA0');
+    p.set(6, 15, '#FFB0C8'); p.set(14, 15, '#FFB0C8');
+    for (let y = 19; y < 29; y++) { const hw = 3.5 + (y - 19) * 0.35; p.rect(Math.round(10 - hw), y, Math.round(hw * 2), 1, robe); }
+    p.rect(7, 19, 6, 1, '#FFD23F'); p.rect(8, 28, 2, 2, fur); p.rect(11, 28, 2, 2, fur);
+    p.rect(15, 18 - f, 1, 7, '#8A5A3A'); p.rect(14, 16 - f, 3, 2, '#FFD23F'); p.set(15, 15 - f, '#FFF1A8');
+    return p.outline().canvas();
+  };
+  SQS.bunA = [bunny(0, '#4D96FF', '#FFFFFF'), bunny(1, '#4D96FF', '#FFFFFF')];
+  SQS.bunB = [bunny(0, '#FF5A8A', '#E8C8A0'), bunny(1, '#FF5A8A', '#E8C8A0')];
+  SQS.bunC = [bunny(0, '#6BCB77', '#C8C0D8'), bunny(1, '#6BCB77', '#C8C0D8')];
+  const hog = (f) => {
+    const p = new PB(22, 20);
+    p.ell(11, 12, 8, 6.5, '#7A5038'); for (let i = 0; i < 12; i++) { const a = Math.PI + i / 11 * Math.PI; p.set(Math.round(11 + Math.cos(a) * 9.5), Math.round(12 + Math.sin(a) * 8), '#5A3A26'); }
+    for (let i = 0; i < 9; i++) p.set(5 + i * 1.5, 8 + (i % 2), '#A07050');
+    p.ell(15, 14, 4.5, 3.5, '#F0D0A8'); p.set(19, 13, EYE); p.set(15, 12, EYE); p.set(16, 15, '#FF8FB1');
+    p.rect(8, 15, 9, 2, '#E8413A'); p.rect(9, 15, 2, 2, '#FFD23F'); p.rect(13, 15, 2, 2, '#FFD23F'); p.rect(7, 16 + f, 2, 3, '#E8413A');
+    p.rect(7, 18, 3, 2, '#5A3A26'); p.rect(14, 18, 3, 2, '#5A3A26');
+    p.rect(5, 2, 1, 6, '#FFD23F'); p.rect(6, 2, 4, 3, '#3D5BC9');
+    return p.outline().canvas();
+  };
+  SQS.hog = [hog(0), hog(1)];
+  const badger = (f) => {
+    const p = new PB(22, 30);
+    p.ell(11, 21, 7, 7.5, '#8A8AA0'); p.ell(11, 22, 4.5, 5.5, '#FFFFFF'); p.rect(7, 24, 8, 4, '#F5E6C8'); p.rect(7, 24, 8, 1, '#E0C890');
+    p.ell(11, 13, 6, 5, '#8A8AA0'); p.rect(10, 8, 2, 9, '#FFFFFF'); p.rect(6, 12, 2, 2, '#3A3355'); p.rect(14, 12, 2, 2, '#3A3355'); p.set(7, 12, EYE); p.set(14, 12, EYE);
+    p.ell(11, 16, 2.2, 1.5, '#FFFFFF'); p.set(11, 16, EYE); p.set(5, 9, '#8A8AA0'); p.set(17, 9, '#8A8AA0');
+    p.ell(11, 5, 6, 3.5, '#FFFFFF'); p.ell(8, 4, 3, 3, '#FFFFFF'); p.ell(14, 4, 3, 3, '#FFFFFF'); p.rect(6, 7, 10, 2, '#F0F0F8');
+    p.rect(2, 19 - f, 3, 3, '#8A8AA0'); p.rect(0, 16 - f, 5, 3, '#E0B070'); p.rect(1, 16 - f, 3, 1, '#FFD8A0');
+    return p.outline().canvas();
+  };
+  SQS.baker = [badger(0), badger(1)];
+  const bear = (f) => {
+    const p = new PB(26, 34);
+    p.ell(13, 24, 8, 8.5, '#9A6A45'); p.ell(13, 25, 5, 5.5, '#D8B088'); p.rect(6, 22, 14, 3, '#2F5BD9'); p.rect(12, 22, 2, 3, '#FFD23F');
+    p.ell(13, 14, 6.5, 5.5, '#9A6A45'); p.ell(7, 10, 2, 2, '#9A6A45'); p.ell(19, 10, 2, 2, '#9A6A45');
+    p.ell(13, 16, 3, 2.2, '#D8B088'); p.rect(12, 15, 2, 1, EYE); p.rect(10, 13, 2, 2, EYE); p.rect(15, 13, 2, 2, EYE); p.set(10, 13, '#FFFFFF'); p.set(15, 13, '#FFFFFF');
+    p.rect(11, 17, 4, 1, dk('#9A6A45', 0.5));
+    p.rect(8, 1, 10, 9, '#2F5BD9'); p.rect(7, 9, 12, 2, '#1F3A99'); p.rect(8, 3, 10, 1, '#4D79F0'); p.rect(11, 4, 4, 3, '#FFD23F'); p.set(12, 5, '#FFF1A8');
+    p.rect(22, 6 + f, 1, 26, '#8A5A3A'); p.rect(20, 3 + f, 5, 4, '#5A4E80'); p.rect(21, 4 + f, 3, 2, '#FFD23F');
+    p.rect(19, 21, 4, 3, '#9A6A45'); p.rect(3, 21, 4, 3, '#9A6A45');
+    p.rect(8, 31, 4, 3, '#7A4A2E'); p.rect(14, 31, 4, 3, '#7A4A2E');
+    return p.outline().canvas();
+  };
+  SQS.bear = [bear(0), bear(1)];
+  // things to find
+  { const p = new PB(13, 10); p.rect(1, 1, 11, 8, '#F5F0E0'); p.rect(1, 8, 11, 1, '#D8CCB0'); for (let i = 0; i < 5; i++) { p.set(1 + i, 1 + i, '#C8B8A0'); p.set(11 - i, 1 + i, '#C8B8A0'); } p.rect(5, 5, 3, 2, '#E8413A'); p.set(6, 7, '#E8413A'); ISP.letter = p.outline().canvas(); }
+  { const p = new PB(14, 14); p.rect(6, 8, 2, 6, '#3E9A4A'); p.ell(4, 11, 2, 1, '#5BC46A');
+    const star = [[6, 0], [7, 0], [5, 1], [6, 1], [7, 1], [8, 1], [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [9, 3], [10, 3], [11, 3], [12, 3], [13, 3], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [3, 7], [4, 7], [5, 7], [8, 7], [9, 7], [10, 7], [2, 8], [3, 8], [10, 8], [11, 8], [5, 2], [6, 2], [7, 2], [8, 2]];
+    for (const [x, y] of star) p.set(x, y, y < 3 ? '#FFFFFF' : '#FFE45C'); p.rect(6, 4, 2, 2, '#FFFFFF'); ISP.starflower = p.outline().canvas(); }
+  { const p = new PB(14, 13); p.rect(5, 6, 4, 6, '#E8F0FF'); p.rect(5, 6, 1, 6, '#C8D0E8'); p.ell(7, 5, 6.5, 4, '#7FB8FF'); p.ell(6, 4, 4, 2, '#B8DCFF');
+    p.rect(3, 4, 2, 1, '#FFFFFF'); p.set(4, 3, '#FFFFFF'); p.rect(9, 3, 2, 1, '#FFF1A8'); p.set(11, 4, '#FFF1A8'); ISP.moonshroom = p.outline().canvas(); }
+  { const p = new PB(14, 11); p.ell(7, 7, 6.5, 3.5, '#FF9AC0'); for (let i = 0; i < 5; i++) p.rect(2 + i * 2.4, 5, 1, 5, '#E06A98'); p.ell(7, 3.5, 5.5, 3, '#FFC0D8'); p.ell(7, 6, 2.5, 2.5, '#FFFFFF'); p.set(6, 5, '#E8FBFF'); ISP.pearl = p.outline().canvas(); }
+  // wisps: little sleepy flames with faces
+  const wisp = (col, f) => {
+    const p = new PB(12, 14), l = lt(col, 0.55);
+    p.ell(6, 9, 4.5, 4.5, col); for (let i = 0; i < 5; i++) p.rect(4 + (i > 2 ? 1 : 0) + (f && i % 2 ? 1 : 0) - (f && i % 2 ? 0 : 0), 4 - i + 0, 4 - Math.floor(i / 2), 1, col);
+    p.rect(5 + f, 0, 2, 1, col); p.ell(6, 10, 2.6, 2.6, l);
+    p.set(4, 9, EYE); p.set(8, 9, EYE); p.rect(5, 11, 3, 1, EYE); p.set(3, 10, '#FFB0C8'); p.set(9, 10, '#FFB0C8');
+    return p.outline().canvas();
+  };
+  ISP.wispCols = { blue: '#5FD8FF', pink: '#FF7FC8', green: '#7CFF6B' };
+  ISP.wisp = {}; for (const [k, c] of Object.entries(ISP.wispCols)) ISP.wisp[k] = [wisp(c, 0), wisp(c, 1)];
+  ISP.wispURL = {}; for (const k of Object.keys(ISP.wispCols)) ISP.wispURL[k] = ISP.wisp[k][0].toDataURL();
+}
+
+// prize furniture for the house
+FURN.push(
+  { id: 'owlperch', name: 'Owl Post perch', price: 0, w: 1, h: 1, free: true, light: '#FFD23F' },
+  { id: 'cauldron', name: 'Bubbling cauldron', price: 0, w: 1, h: 1, free: true, light: '#7CFF6B' },
+  { id: 'wisplamp', name: 'Wisp lantern', price: 0, w: 1, h: 1, free: true, light: '#5FD8FF' },
+  { id: 'moonbanner', name: 'Starlight banner', price: 0, w: 1, h: 1, free: true, light: '#C9BFFF' },
+);
+for (const F of FURN.slice(-4)) FURN_BY[F.id] = F;
+{
+  const _fs = furnSprite;
+  const MINE = {
+    owlperch(p, B) { p.rect(7, B - 22, 2, 22, '#8A5A3A'); p.rect(3, B - 2, 10, 2, '#5A3A2E'); p.rect(2, B - 14, 12, 2, '#8A5A3A'); p.ell(8, B - 19, 4, 4.5, '#A0704A'); p.ell(8, B - 18, 2.5, 3, '#F0D8B0'); p.rect(6, B - 21, 1, 1, '#FFFFFF'); p.rect(9, B - 21, 1, 1, '#FFFFFF'); p.set(8, B - 20, '#FF9F1C'); p.rect(11, B - 13, 4, 3, '#F5F0E0'); p.set(12, B - 12, '#E8413A'); },
+    cauldron(p, B) { p.ell(8, B - 6, 7, 5.5, '#3A3355'); p.rect(1, B - 12, 14, 3, '#4B4470'); p.rect(2, B - 12, 12, 1, '#6A62A0'); p.ell(8, B - 12, 5.5, 1.5, '#7CFF6B'); p.ell(6, B - 15, 1.5, 1.5, '#B9FF6B'); p.ell(10, B - 17, 1, 1, '#B9FF6B'); p.rect(3, B - 1, 2, 1, '#FF7A3A'); p.rect(11, B - 1, 2, 1, '#FFD23F'); },
+    wisplamp(p, B) { p.rect(7, B - 4, 2, 4, '#3A3355'); p.rect(4, B - 2, 8, 2, '#4B4470'); p.rect(3, B - 18, 10, 14, '#4B4470'); p.rect(4, B - 17, 8, 12, '#2A4A7A'); p.ell(8, B - 10, 3, 3.5, '#5FD8FF'); p.ell(8, B - 10, 1.5, 2, '#E8FBFF'); p.rect(2, B - 20, 12, 2, '#4B4470'); p.rect(7, B - 22, 2, 2, '#4B4470'); },
+    moonbanner(p, B) { p.rect(1, B - 26, 14, 2, '#8A5A3A'); for (let i = 0; i < 6; i++) p.rect(2 + i * 2, B - 24, 2, 18, RAINBOW[i]); p.rect(2, B - 6, 12, 1, '#FFD23F'); p.ell(8, B - 15, 3.5, 3.5, '#FFF1A8'); p.ell(9.5, B - 16, 3, 3, RAINBOW[2]); },
+  };
+  furnSprite = function (id) {
+    if (!MINE[id]) return _fs(id);
+    if (furnSpr[id]) return furnSpr[id];
+    const F = FURN_BY[id], H = F.h * TS + 16, p = new PB(F.w * TS, H);
+    MINE[id](p, H - 1);
+    return (furnSpr[id] = p.outline().canvas());
+  };
+}
+
+// ---------------------------------------------------------------- drawing bits with extra detail
+function isMap(W, H, opts) {
+  const m = newMap(W, H, 'land');
+  Object.assign(m, { field: true, calm: true, noRespawn: true, ff: true, flowers: [], water: [], bushes: [], obs: [], runes: [], switches: [], castles: [], champ: null, spawns: [], gemSpots: [], exits: [], entries: {} }, opts);
+  return m;
+}
+// grass with big soft patches, speckles, blades, clover and tiny flowers
+function isGrassBase(c, tiles, r, pal) {
+  for (const [tx, ty] of tiles) px(c, tx * TS, ty * TS, TS, TS, pal[0]);
+  c.save(); c.beginPath(); for (const [tx, ty] of tiles) c.rect(tx * TS, ty * TS, TS, TS); c.clip();
+  const n = tiles.length / 5;
+  for (let i = 0; i < n; i++) {
+    const [tx, ty] = tiles[(r() * tiles.length) | 0], x = tx * TS + r() * TS, y = ty * TS + r() * TS, rx = 14 + r() * 30, ry = rx * (0.5 + r() * 0.3), col = i % 3 ? pal[1] : pal[2];
+    pell(c, x, y, rx, ry, col);
+    for (let k = 0; k < rx * 1.5; k++) { const a = r() * Math.PI * 2, d = 1 + r() * 0.15; px(c, Math.round(x + Math.cos(a) * rx * d), Math.round(y + Math.sin(a) * ry * d), 1, 1, col); }
+  }
+  c.restore();
+}
+function isGrass(c, m, r, tx, ty, pal) {
+  const x = tx * TS, y = ty * TS;
+  for (let i = 0; i < 5; i++) px(c, x + ((r() * 15) | 0), y + ((r() * 15) | 0), 2, 1, r() < 0.5 ? pal[1] : pal[2]);
+  for (let i = 0; i < 3; i++) { const xx = x + ((r() * 15) | 0), yy = y + 2 + ((r() * 12) | 0); px(c, xx, yy, 1, 2, pal[3]); px(c, xx, yy, 1, 1, pal[4]); if (r() < 0.4) { px(c, xx + 1, yy + 1, 1, 1, pal[3]); } }
+  if (r() < 0.06) { const xx = x + 3 + ((r() * 9) | 0), yy = y + 3 + ((r() * 9) | 0); px(c, xx, yy, 2, 2, pal[3]); px(c, xx + 2, yy + 1, 2, 2, pal[3]); px(c, xx + 1, yy + 2, 2, 2, pal[4]); }
+  if (r() < 0.07) { const xx = x + 2 + ((r() * 11) | 0), yy = y + 2 + ((r() * 11) | 0), col = pick(pal[5]); px(c, xx, yy + 1, 1, 2, pal[3]); px(c, xx - 1, yy, 3, 1, col); px(c, xx, yy - 1, 1, 3, col); px(c, xx, yy, 1, 1, '#FFFFFF'); if (r() < 0.5) m.flowers.push([xx, yy, col]); }
+  if (r() < 0.04) { const xx = x + ((r() * 12) | 0), yy = y + ((r() * 12) | 0); px(c, xx, yy, 3, 2, '#5A5470'); px(c, xx, yy, 2, 1, '#8A84A8'); }
+}
+// round cobbles with mortar and moss in the cracks
+function isCobble(c, r, tx, ty, pal = ['#5E5688', '#675E94', '#544C7C'], hi = '#857BB8', lo = '#3A3358', gap = '#272040') {
+  const x = tx * TS, y = ty * TS;
+  px(c, x, y, TS, TS, gap);
+  const off = (ty % 2) * 4;
+  for (let row = 0; row < 2; row++) for (let k = -1; k < 3; k++) {
+    const sx = x + k * 8 + off + (row ? 4 : 0) - 4, sy = y + row * 8, w = 7, h = 7;
+    const x0 = Math.max(x, sx + 1), x1 = Math.min(x + TS, sx + w); if (x1 <= x0) continue;
+    const col = pal[(r() * pal.length) | 0];
+    px(c, x0, sy + 1, x1 - x0, h - 1, col);
+    px(c, x0, sy + 1, x1 - x0, 1, hi); if (x0 === sx + 1) px(c, x0, sy + 1, 1, h - 2, hi);
+    px(c, x0, sy + h - 1, x1 - x0, 1, lo);
+    if (r() < 0.2) px(c, x0 + 1, sy + 3, 1, 1, lo);
+  }
+  if (r() < 0.3) px(c, x + ((r() * 14) | 0), y + ((r() * 2) | 0) * 8, 2, 1, '#3E7A5A');
+  if (r() < 0.15) px(c, x + ((r() * 14) | 0), y + 7, 1, 1, '#5BAA6A');
+}
+// a big moonlit tree: roots on the ground, a layered canopy with a bright rim, hanging moss
+function isTree(c, f, m, tx, ty, style, r) {
+  const x = tx * TS + 8, y = ty * TS + 14;
+  const P = style === 'blossom' ? ['#4A1E4E', '#7A2E6E', '#B04A8C', '#E07AB8', '#FFB0DA'] : style === 'gold' ? ['#3A2A1E', '#6A4A1E', '#A8742A', '#E0A83A', '#FFD86A'] : ['#0E2A30', '#164238', '#1F5E48', '#2F8060', '#5FB88A'];
+  if (style === 'pine') {
+    pell(c, x, y + 1, 9, 3, 'rgba(10,6,24,.5)');
+    px(c, x - 2, y - 6, 4, 7, '#3A2433'); px(c, x + 1, y - 6, 1, 7, '#24141E');
+    const tiers = [[13, 0], [11, 9], [9, 17], [7, 24], [4, 30]];
+    for (const [w, dy] of tiers) for (let i = 0; i < 12; i++) { const hw = Math.round(w * (i + 1) / 12); f.fillStyle = OUT; f.fillRect(x - hw - 1, y - 8 - dy - 12 + i, hw * 2 + 2, 1); }
+    for (const [w, dy] of tiers) for (let i = 0; i < 11; i++) { const hw = Math.round(w * (i + 1) / 12); px(f, x - hw, y - 8 - dy - 11 + i, hw * 2, 1, i % 4 === 3 ? '#0B2226' : '#163A3A'); px(f, x - hw, y - 8 - dy - 11 + i, Math.max(1, hw - 1), 1, i < 3 ? '#3E7A72' : '#245050'); if (i > 6) px(f, x + hw - 2, y - 8 - dy - 11 + i, 2, 1, '#0B2226'); }
+    px(f, x - 1, y - 52, 2, 3, '#3E7A72');
+    setSolid(m, tx, ty); return;
+  }
+  pell(c, x + 2, y + 1, 12, 3, 'rgba(10,6,24,.5)');
+  // trunk with bark lines and roots
+  px(c, x - 4, y - 14, 8, 15, OUT); px(c, x - 3, y - 14, 6, 14, '#4A3040'); px(c, x + 1, y - 14, 2, 14, '#32202C'); px(c, x - 3, y - 14, 1, 14, '#6A4858');
+  px(c, x - 1, y - 10, 1, 4, '#32202C'); px(c, x, y - 5, 1, 3, '#32202C');
+  px(c, x - 7, y - 1, 4, 2, '#4A3040'); px(c, x + 4, y - 1, 4, 2, '#32202C'); px(c, x - 8, y, 2, 1, '#4A3040'); px(c, x + 7, y, 2, 1, '#32202C');
+  if (r() < 0.5) { px(c, x - 3, y - 4, 3, 2, '#3E7A5A'); px(c, x - 2, y - 5, 1, 1, '#5BAA6A'); }
+  // canopy
+  const cy = y - 30, R = 17 + ((r() * 4) | 0);
+  const blobs = [[-9, 4, R * 0.62, R * 0.5], [9, 4, R * 0.62, R * 0.5], [0, -2, R * 0.85, R * 0.66], [-5, -9, R * 0.55, R * 0.45], [6, -8, R * 0.5, R * 0.42]];
+  for (const [dx, dy, rx, ry] of blobs) pell(f, x + dx, cy + dy, rx + 1, ry + 1, OUT);
+  for (const [dx, dy, rx, ry] of blobs) pell(f, x + dx, cy + dy, rx, ry, P[1]);
+  for (const [dx, dy, rx, ry] of blobs) pell(f, x + dx - 1, cy + dy - 2, rx * 0.8, ry * 0.75, P[2]);
+  for (const [dx, dy, rx, ry] of blobs) pell(f, x + dx - 3, cy + dy - 4, rx * 0.45, ry * 0.4, P[3]);
+  for (const [dx, dy, rx, ry] of blobs) { px(f, Math.round(x + dx - rx * 0.4), Math.round(cy + dy - ry * 0.8), Math.round(rx * 0.5), 1, P[4]); }
+  for (const [dx, dy, rx, ry] of blobs) pell(f, x + dx + 2, cy + dy + ry * 0.55, rx * 0.7, ry * 0.25, P[0]);
+  for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = r() * R * 0.8; px(f, Math.round(x + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d * 0.7), 2, 1, r() < 0.5 ? P[3] : P[0]); }
+  // hanging moss, and sometimes glowing fruit
+  for (let i = 0; i < 4; i++) { const hx = Math.round(x - R * 0.7 + r() * R * 1.4), len = 4 + ((r() * 7) | 0), top = cy + Math.round(R * 0.45); px(f, hx, top, 1, len, '#3E7A5A'); px(f, hx, top + len, 1, 1, '#7CD8A0'); }
+  if (r() < 0.35) for (let i = 0; i < 3; i++) { const fx = Math.round(x - 10 + r() * 20), fy = Math.round(cy - 6 + r() * 14), col = style === 'blossom' ? '#FFE0F0' : pick(['#FFD23F', '#FF9ACB', '#7FE8FF']); px(f, fx, fy, 2, 2, col); m.lights.push({ x: fx + 1, y: fy + 1, r: 7, col, a: 0.55, fl: 1 }); }
+  setSolid(m, tx, ty);
+}
+// iron lamp post with a hanging lantern
+function isLamp(c, f, m, tx, ty, col = '#FFC870') {
+  const x = tx * TS + 8, y = ty * TS + 14;
+  pell(c, x, y, 5, 2, 'rgba(10,6,24,.5)');
+  px(c, x - 2, y - 3, 4, 3, '#1E1830'); px(c, x - 1, y - 14, 2, 12, '#2A2240');
+  px(f, x - 1, y - 30, 2, 16, '#2A2240'); px(f, x - 1, y - 30, 1, 16, '#4B4470');
+  px(f, x, y - 32, 7, 2, '#2A2240'); px(f, x + 6, y - 31, 1, 3, '#2A2240'); px(f, x - 3, y - 33, 3, 2, '#2A2240');
+  px(f, x + 3, y - 28, 7, 8, OUT); px(f, x + 4, y - 27, 5, 6, col); px(f, x + 5, y - 26, 2, 3, '#FFFFFF'); px(f, x + 3, y - 29, 7, 1, '#4B4470'); px(f, x + 5, y - 20, 3, 1, '#4B4470');
+  m.lights.push({ x: x + 6, y: y - 24, r: 40, col, a: 0.55, fl: 1 });
+  setSolid(m, tx, ty);
+}
+// a crooked wizardly cottage: stone footing, timber frame, glowing windows with flower boxes, a tall steep roof
+function isCottage(c, f, m, tx, ty, w, h, o) {
+  const x = tx * TS, y = ty * TS, W = w * TS, Hp = h * TS, bot = y + Hp, r = rng(tx * 97 + ty * 13);
+  const wall = o.wall || '#E8DCC0', wallD = mixHex(wall, '#5A4A6A', 0.35), beam = o.beam || '#5A3A2E', roof = o.roof || '#3D5BC9', roofD = mixHex(roof, '#000000', 0.35), roofL = mixHex(roof, '#FFFFFF', 0.3);
+  pell(c, x + W / 2, bot + 2, W / 2 + 6, 5, 'rgba(10,6,24,.55)');
+  const wallTop = y + 6;
+  px(c, x - 1, wallTop - 1, W + 2, bot - wallTop + 1, OUT);
+  px(c, x, wallTop, W, bot - wallTop - 1, wall);
+  for (let i = 0; i < 30; i++) px(c, x + ((r() * (W - 2)) | 0), wallTop + ((r() * (bot - wallTop - 8)) | 0), 2, 1, wallD);
+  px(c, x + W - 8, wallTop, 8, bot - wallTop - 1, wallD);
+  // timber frame
+  px(c, x, wallTop, W, 3, beam); px(c, x, bot - 12, W, 2, beam);
+  for (let k = 0; k <= w; k++) px(c, Math.min(x + W - 3, x + k * TS - (k ? 1 : 0)), wallTop, 3, bot - wallTop - 12, beam);
+  for (let k = 0; k < w; k++) if ((k + tx) % 2 === 0) { for (let i = 0; i < 10; i++) px(c, x + k * TS + 2 + i, wallTop + 4 + i * 1.6, 2, 2, beam); }
+  // stone footing
+  px(c, x, bot - 10, W, 9, '#5E5688');
+  for (let yy = bot - 10; yy < bot - 1; yy += 3) for (let xx = x + ((yy / 3) % 2) * 3; xx < x + W; xx += 6) { px(c, xx, yy, 5, 2, '#756CA0'); px(c, xx, yy + 2, 5, 1, '#3A3358'); }
+  // door
+  const dx = x + Math.floor(w / 2) * TS + (w % 2 ? 0 : -8) + 2, dw = 12, dh = 20;
+  px(c, dx - 1, bot - dh - 1, dw + 2, dh + 1, OUT); px(c, dx, bot - dh, dw, dh - 1, o.door || '#7A4A2E');
+  pell(c, dx + dw / 2, bot - dh, dw / 2 + 1, 4, OUT); pell(c, dx + dw / 2, bot - dh + 1, dw / 2, 3.5, o.door || '#7A4A2E');
+  for (let k = 3; k < dw; k += 4) px(c, dx + k, bot - dh, 1, dh - 1, mixHex(o.door || '#7A4A2E', '#000000', 0.3));
+  px(c, dx + dw - 4, bot - 10, 2, 2, '#FFD23F'); px(c, dx - 3, bot - 2, dw + 6, 2, '#5E5688');
+  px(c, dx - 5, bot - dh - 2, 3, 4, '#2A2240'); px(c, dx - 5, bot - dh + 2, 3, 3, '#FFC870'); m.lights.push({ x: dx - 4, y: bot - dh + 3, r: 22, col: '#FFC870', a: 0.6, fl: 1 });
+  // windows: warm light, little panes, a flower box underneath
+  const wins = [];
+  for (let k = 0; k < w; k++) { const wx = x + k * TS + 3; if (wx + 10 > dx - 2 && wx < dx + dw + 2) continue; wins.push(wx); }
+  for (const wx of wins) {
+    const wy = wallTop + 8;
+    px(c, wx - 1, wy - 1, 12, 13, OUT); px(c, wx, wy, 10, 11, '#FFC870'); px(c, wx, wy, 10, 3, '#FFE6A8'); px(c, wx + 4, wy, 2, 11, '#5A3A2E'); px(c, wx, wy + 5, 10, 1, '#5A3A2E');
+    px(c, wx + 1, wy + 1, 2, 2, '#FFFFFF');
+    px(c, wx - 2, wy + 11, 14, 4, OUT); px(c, wx - 1, wy + 11, 12, 3, '#8A5A3A');
+    for (let i = 0; i < 5; i++) { const col = pick(o.flowers || ['#FF5A8A', '#FFD23F', '#C77DFF', '#FFFFFF']); px(c, wx + i * 2 + 1, wy + 9 + ((i % 2) | 0), 2, 2, col); px(c, wx + i * 2, wy + 10, 1, 1, '#3E9A4A'); }
+    m.lights.push({ x: wx + 5, y: wy + 6, r: 20, col: '#FFB04A', a: 0.5, fl: 0 });
+  }
+  // ivy climbing a corner
+  if (o.ivy !== false) { const ix = r() < 0.5 ? x + 1 : x + W - 6; for (let i = 0; i < 26; i++) { const yy = bot - 2 - i, xx = ix + Math.round(Math.sin(i * 0.5) * 2); px(c, xx, yy, 2, 1, '#2F7C4B'); if (i % 3 === 0) px(c, xx + 1, yy - 1, 3, 2, i % 6 ? '#3E9A4A' : '#5BC46A'); } }
+  // the roof: a steep, slightly crooked witch-hat roof. Rows above the house hang over whoever walks behind.
+  const rh = o.roofH || 34 + w * 2, lean = o.lean || 0, eave = 5, apexX = x + W / 2 + lean, apexY = wallTop - rh, baseY = wallTop + 2;
+  const roofRow = (cv, yy) => {
+    const t = (yy - apexY) / (baseY - apexY); if (t < 0 || t > 1) return;
+    const cxr = apexX + (x + W / 2 - apexX) * t, hw = Math.round(1 + (W / 2 + eave - 1) * Math.pow(t, 0.9));
+    px(cv, Math.round(cxr - hw) - 1, yy, hw * 2 + 2, 1, OUT);
+    const band = Math.floor((yy - apexY) / 4) % 2 === 0;
+    px(cv, Math.round(cxr - hw), yy, hw * 2, 1, band ? roof : mixHex(roof, '#000000', 0.12));
+    px(cv, Math.round(cxr - hw), yy, Math.max(1, Math.round(hw * 0.55)), 1, band ? roofL : mixHex(roofL, '#000000', 0.1));
+    px(cv, Math.round(cxr + hw * 0.55), yy, Math.round(hw * 0.45), 1, roofD);
+    if ((yy - apexY) % 4 === 3) for (let k = Math.round(cxr - hw) + ((yy >> 2) % 2) * 3; k < cxr + hw; k += 6) px(cv, k, yy, 1, 1, OUT);
+  };
+  for (let yy = Math.floor(apexY); yy <= baseY; yy++) roofRow(yy < y ? f : c, yy);
+  px(c, x - eave - 1, baseY, W + eave * 2 + 2, 3, OUT); px(c, x - eave, baseY, W + eave * 2, 2, roofD);
+  // chimney and a little star on top
+  const chx = x + W - 14, chy = wallTop - Math.round(rh * 0.5);
+  px(f, chx - 1, chy - 9, 9, 12, OUT); px(f, chx, chy - 8, 7, 11, '#8A6A60'); px(f, chx, chy - 8, 7, 2, '#5E5688'); px(f, chx + 5, chy - 6, 2, 9, '#6A4E48');
+  px(f, Math.round(apexX) - 1, apexY - 6, 2, 6, '#FFD23F'); px(f, Math.round(apexX) - 3, apexY - 4, 6, 1, '#FFD23F'); px(f, Math.round(apexX) - 1, apexY - 7, 2, 1, '#FFF1A8');
+  m.lights.push({ x: Math.round(apexX), y: apexY - 4, r: 10, col: '#FFD23F', a: 0.5, fl: 1 });
+  // a dormer window in the roof for bigger houses
+  if (w >= 5) { const ox = Math.round(apexX) - 5, oy = wallTop - Math.round(rh * 0.35), cv = oy < y ? f : c; px(cv, ox - 1, oy - 1, 12, 11, OUT); px(cv, ox, oy, 10, 9, '#FFC870'); px(cv, ox + 4, oy, 2, 9, '#5A3A2E'); px(cv, ox - 2, oy - 3, 14, 3, roofD); m.lights.push({ x: ox + 5, y: oy + 4, r: 16, col: '#FFB04A', a: 0.45, fl: 0 }); }
+  // hanging shop sign
+  if (o.sign) {
+    const sx = x + W + 2, sy = wallTop + 6;
+    px(c, sx - 2, sy - 2, 12, 2, '#2A2240'); px(c, sx, sy, 1, 3, '#2A2240'); px(c, sx + 8, sy, 1, 3, '#2A2240');
+    px(c, sx - 2, sy + 3, 13, 11, OUT); px(c, sx - 1, sy + 4, 11, 9, '#8A5A3A'); px(c, sx - 1, sy + 4, 11, 1, '#B5835A');
+    o.sign(c, sx + 4, sy + 8);
+  }
+  for (let yy = ty; yy < ty + h; yy++) for (let xx = tx; xx < tx + w; xx++) setSolid(m, xx, yy);
+  return { door: { x: dx + dw / 2, y: bot + 4 }, chimney: { x: chx + 3, y: chy - 9 } };
+}
+// rows of round hedge bushes
+function isHedge(c, f, m, tx0, ty, tx1, flowers) {
+  for (let tx = tx0; tx <= tx1; tx++) {
+    const x = tx * TS, y = ty * TS;
+    pell(c, x + 8, y + 15, 10, 3, 'rgba(10,6,24,.45)');
+    pell(c, x + 8, y + 8, 10, 8, OUT); pell(c, x + 8, y + 8, 9, 7, '#1F5E48'); pell(c, x + 7, y + 6, 7, 5, '#2F8060'); pell(c, x + 5, y + 4, 3, 2, '#5FB88A');
+    for (let i = 0; i < 6; i++) px(c, x + 2 + ((i * 5) % 12), y + 4 + ((i * 3) % 9), 2, 1, i % 2 ? '#164238' : '#3E9A6A');
+    if (flowers && (tx % 2 === 0)) { const col = flowers[tx % flowers.length]; px(c, x + 4, y + 5, 2, 2, col); px(c, x + 10, y + 9, 2, 2, col); }
+    setSolid(m, tx, ty);
+  }
+}
+// draw something into a scratch canvas, then split it: the part above a line hangs over people (fg), the rest is ground (bg)
+function isSplit(c, f, w, h, x, y, splitY, draw) {
+  const t = mk(w, h), g = t.getContext('2d'); draw(g);
+  const k = Math.max(0, Math.min(h, splitY - y));
+  if (k > 0) f.drawImage(t, 0, 0, w, k, x, y, w, k);
+  if (k < h) c.drawImage(t, 0, k, w, h - k, x, y + k, w, h - k);
+}
+// stone towers with round shading, brick courses, lit windows and moss
+const IST = ['#C2BAE6', '#A39AD0', '#857BB8', '#665D96', '#4A4276'];
+const isStone = (t) => t < 0.1 ? IST[0] : t < 0.38 ? IST[1] : t < 0.68 ? IST[2] : t < 0.88 ? IST[3] : IST[4];
+function isTower(c, m, r, x, w, top, base, o = {}) {
+  px(c, x - 1, top - 1, w + 2, base - top + 1, OUT);
+  for (let i = 0; i < w; i++) px(c, x + i, top, 1, base - top, isStone(w > 1 ? i / (w - 1) : 0.5));
+  for (let yy = top + 6; yy < base; yy += 6) {
+    px(c, x, yy, w, 1, 'rgba(36,26,70,.35)');
+    for (let xx = x + ((yy / 6) % 2) * 5 + 2; xx < x + w - 1; xx += 10) px(c, xx, yy - 5, 1, 5, 'rgba(36,26,70,.3)');
+  }
+  for (let i = 0; i < w * (base - top) / 60; i++) px(c, x + ((r() * w) | 0), top + ((r() * (base - top)) | 0), 1, 1, r() < 0.5 ? '#D8D0F5' : '#544C80');
+  // moss and ivy near the ground
+  for (let i = 0; i < w / 2; i++) { const xx = x + ((r() * w) | 0), hh = 3 + ((r() * 10) | 0); px(c, xx, base - hh, 1, hh, r() < 0.5 ? '#2F7C5A' : '#3E9A6A'); }
+  if (o.ivy) for (let k = 0; k < 2; k++) { const ix = x + 2 + ((r() * (w - 6)) | 0); for (let i = 0; i < o.ivy; i++) { const yy = base - 1 - i, xx = ix + Math.round(Math.sin(i * 0.4) * 2); px(c, xx, yy, 2, 1, '#2F7C4B'); if (i % 3 === 0) px(c, xx + 1, yy - 1, 3, 2, i % 6 ? '#3E9A4A' : '#5BC46A'); } }
+  // windows
+  for (const wy of o.wins || []) {
+    const n = Math.max(1, Math.floor((w - 4) / 14)), gap = w / n;
+    for (let k = 0; k < n; k++) {
+      const wx = Math.round(x + gap * k + gap / 2 - 3), lit = r() < (o.lit || 0.8), ww = o.big ? 8 : 6, hh = o.big ? 13 : 10;
+      px(c, wx - 1, wy - 1, ww + 2, hh + 2, OUT); px(c, wx, wy, ww, hh, lit ? '#FFC870' : '#2A2448'); px(c, wx, wy, 1, 1, OUT); px(c, wx + ww - 1, wy, 1, 1, OUT);
+      if (lit) { px(c, wx + 1, wy + 1, 2, 3, '#FFF1C8'); px(c, wx + ww / 2 - (o.big ? 1 : 0), wy, 1, hh, '#B07A30'); m.lights.push({ x: wx + ww / 2, y: wy + hh / 2, r: o.big ? 18 : 13, col: '#FFB04A', a: 0.55, fl: r() < 0.3 ? 1 : 0 }); }
+      px(c, wx - 1, wy + hh + 1, ww + 2, 1, '#D8D0F5');
+    }
+  }
+  if (o.cren) for (let xx = x; xx < x + w - 2; xx += 6) { px(c, xx - 1, top - 6, 6, 6, OUT); px(c, xx, top - 5, 4, 5, isStone((xx - x) / w)); }
+}
+// a pointed slate roof with shingles, a gold tip and a little rainbow pennant
+function isCone(c, m, cx, base, hw0, h, roof, o = {}) {
+  const R = [mixHex(roof, '#FFFFFF', 0.35), mixHex(roof, '#FFFFFF', 0.12), roof, mixHex(roof, '#000000', 0.3), mixHex(roof, '#000000', 0.5)];
+  for (let i = 0; i <= h; i++) {
+    const t = i / h, hw = Math.max(1, Math.round(hw0 * Math.pow(t, o.curve || 1.15))), y = base - h + i;
+    px(c, cx - hw - 1, y, hw * 2 + 2, 1, OUT);
+    for (let k = -hw; k < hw; k++) { const u = (k + hw) / (2 * hw); px(c, cx + k, y, 1, 1, u < 0.15 ? R[0] : u < 0.4 ? R[1] : u < 0.7 ? R[2] : u < 0.9 ? R[3] : R[4]); }
+    if (i % 4 === 3 && i < h) for (let k = -hw + ((i >> 2) % 2) * 3; k < hw; k += 6) px(c, cx + k, y, 1, 1, R[4]);
+  }
+  px(c, cx - hw0 - 2, base, hw0 * 2 + 4, 2, OUT); px(c, cx - hw0 - 1, base, hw0 * 2 + 2, 1, R[3]);
+  px(c, cx - 1, base - h - 7, 2, 7, '#FFD23F'); px(c, cx - 2, base - h - 3, 4, 1, '#FFD23F'); px(c, cx - 1, base - h - 8, 2, 1, '#FFF1A8');
+  if (o.flag) { px(c, cx, base - h - 18, 1, 11, '#2A2240'); for (let i = 0; i < 6; i++) px(c, cx + 1, base - h - 18 + i, 9 - i, 1, o.flag === true ? RAINBOW[i] : o.flag); }
+  if (o.orb) { pell(c, cx, base - h - 12, 4, 4, OUT); pell(c, cx, base - h - 12, 3, 3, '#E8E0FF'); px(c, cx - 1, base - h - 13, 1, 1, '#FFFFFF'); m.lights.push({ x: cx, y: base - h - 12, r: 46, col: '#C9BFFF', a: 0.7, fl: 2 }); }
+}
+// the Starlight Castle: a huge castle across the top of the island, many towers, lit windows, a rainbow rose window
+function isCastle(c, m, r) {
+  const X0 = 15 * TS, X1 = 45 * TS, B = 12 * TS, roof = '#2F3F8C';
+  // the tall Moonspire behind everything
+  isTower(c, m, r, 468, 24, 46, 120, { wins: [60, 82] }); isCone(c, m, 480, 46, 15, 34, '#4A2E9A', { orb: 1 });
+  // back towers peeking over the walls
+  for (const [x, w, top, h] of [[300, 22, 70, 30], [638, 22, 70, 30], [372, 18, 64, 26], [570, 18, 64, 26]]) { isTower(c, m, r, x, w, top, 130, { wins: [top + 10] }); isCone(c, m, x + w / 2, top, w / 2 + 4, h, roof, { flag: true }); }
+  // the curtain wall with battlements
+  isTower(c, m, r, X0 + 30, X1 - X0 - 60, 124, B, { wins: [140], cren: true, ivy: 24, lit: 0.6 });
+  // the keep in the middle, with a wide roof
+  isTower(c, m, r, 384, 192, 84, B, { wins: [96, 118], big: true, ivy: 30 });
+  for (let i = 0; i <= 22; i++) { const y = 84 - 22 + i, hw = 40 + i * 2.6; px(c, 480 - hw - 1, y, hw * 2 + 2, 1, OUT); px(c, 480 - hw, y, hw * 2, 1, i % 4 === 3 ? '#1F2A66' : roof); px(c, 480 - hw, y, hw * 0.6, 1, i % 4 === 3 ? '#2F3F8C' : '#4D63B8'); }
+  px(c, 438, 62, 84, 1, '#FFD23F');
+  // gate towers
+  for (const x of [420, 516]) { isTower(c, m, r, x, 26, 70, B, { wins: [84, 110], ivy: 20 }); isCone(c, m, x + 13, 70, 17, 40, roof, { flag: true }); }
+  // big corner towers and middle towers
+  for (const x of [X0, X1 - 50]) { isTower(c, m, r, x, 50, 50, B, { wins: [64, 92, 120, 150], big: true, ivy: 40 }); isCone(c, m, x + 25, 50, 31, 48, roof, { flag: true }); }
+  for (const x of [322, 606]) { isTower(c, m, r, x, 32, 82, B, { wins: [94, 126] }); isCone(c, m, x + 16, 82, 21, 36, roof, { flag: true }); }
+  // banners: one for each rainbow ghost
+  [[360, 0], [376, 1], [584, 2], [600, 3], [302, 4], [656, 5]].forEach(([x, i]) => { px(c, x - 1, 128, 10, 22, OUT); px(c, x, 129, 8, 18, RAINBOW[i]); px(c, x, 147, 2, 2, RAINBOW[i]); px(c, x + 6, 147, 2, 2, RAINBOW[i]); px(c, x + 3, 135, 2, 2, '#FFF1A8'); px(c, x - 2, 127, 12, 2, '#FFD23F'); });
+  // rainbow rose window over the gate
+  const rx = 480, ry = 128;
+  pell(c, rx, ry, 14, 14, OUT); pell(c, rx, ry, 13, 13, '#2A2448');
+  for (let yy = -12; yy <= 12; yy++) for (let xx = -12; xx <= 12; xx++) { const d = Math.hypot(xx, yy); if (d > 12) continue; const a = (Math.atan2(yy, xx) + Math.PI) / (Math.PI * 2); px(c, rx + xx, ry + yy, 1, 1, d < 3 ? '#FFF1A8' : (Math.round(a * 24) % 4 === 0 ? OUT : RAINBOW[Math.floor(a * 6) % 6])); }
+  for (let i = 0; i < 6; i++) m.lights.push({ x: rx + Math.cos(i / 6 * Math.PI * 2) * 7, y: ry + Math.sin(i / 6 * Math.PI * 2) * 7, r: 14, col: RAINBOW[i], a: 0.5, fl: 2 });
+  m.lights.push({ x: rx, y: ry, r: 34, col: '#FFF1A8', a: 0.35, fl: 1 });
+  // the gate: a tall arch with gold trim (its doors are drawn live)
+  px(c, 462, 146, 36, 46, OUT); pell(c, 480, 150, 18, 12, OUT);
+  px(c, 464, 150, 32, 42, '#140C24'); pell(c, 480, 151, 16, 10, '#140C24');
+  for (let a = 0; a <= 20; a++) { const t = Math.PI + a / 20 * Math.PI; px(c, Math.round(480 + Math.cos(t) * 17) - 1, Math.round(150 + Math.sin(t) * 11), 2, 2, '#FFD23F'); }
+  px(c, 461, 150, 3, 42, '#FFD23F'); px(c, 496, 150, 3, 42, '#FFD23F');
+  // torches either side of the gate
+  for (const x of [452, 506]) { px(c, x, 158, 3, 8, '#2A2240'); px(c, x - 1, 154, 5, 4, '#FF9F1C'); px(c, x, 152, 3, 3, '#FFD23F'); m.lights.push({ x: x + 1, y: 154, r: 30, col: '#FF9F1C', a: 0.65, fl: 2 }); }
+  // the castle is solid; the gate tiles open later
+  for (let ty = 0; ty < 12; ty++) for (let tx = 15; tx < 45; tx++) setSolid(m, tx, ty);
+  m.gate = { x: 480, y: 192, tiles: [[29, 11], [30, 11]] };
+}
+// a tall star tower with a domed top and a telescope
+function isStarTower(c, f, m, r, tx, ty) {
+  const x = tx * TS, w = 3 * TS, base = (ty + 4) * TS;
+  pell(c, x + w / 2, base + 2, w / 2 + 6, 5, 'rgba(10,6,24,.55)');
+  isSplit(c, f, w + 30, base + 10, x - 15, 0, ty * TS, (g) => {
+    const ox = 15;
+    isTower(g, { lights: [] }, r, ox, w, 30, base, { wins: [44, 72, 100], ivy: 30 });
+    pell(g, ox + w / 2, 30, w / 2 + 3, 18, OUT); pell(g, ox + w / 2, 30, w / 2 + 2, 17, '#3D5BC9'); pell(g, ox + w / 2 - 6, 24, 10, 8, '#6A86E8');
+    for (let i = -2; i <= 2; i++) px(g, ox + w / 2 + i * 8, 14 + Math.abs(i) * 3, 1, 16 - Math.abs(i) * 3, '#2A3A8C');
+    px(g, ox + w / 2 - 22, 30, w + 20, 3, OUT); px(g, ox + w / 2 - 21, 30, w + 18, 2, '#FFD23F');
+    px(g, ox + w / 2 + 8, 8, 18, 5, OUT); px(g, ox + w / 2 + 9, 9, 16, 3, '#C8A04A'); px(g, ox + w / 2 + 24, 7, 4, 7, '#FFD23F');
+    px(g, ox + w / 2 - 5, base - 20, 10, 20, OUT); px(g, ox + w / 2 - 4, base - 19, 8, 19, '#3A2A5A'); px(g, ox + w / 2 + 1, base - 10, 2, 2, '#FFD23F');
+  });
+  for (const wy of [44, 72, 100]) m.lights.push({ x: x + w / 2, y: wy + 5, r: 14, col: '#FFB04A', a: 0.5, fl: 0 });
+  m.lights.push({ x: x + w / 2 + 26, y: 10, r: 18, col: '#FFF1A8', a: 0.6, fl: 1 });
+  for (let yy = ty; yy < ty + 4; yy++) for (let xx = tx; xx < tx + 3; xx++) setSolid(m, xx, yy);
+}
+// a glass greenhouse full of glowing plants
+function isGreenhouse(c, f, m, r, tx, ty, w, h) {
+  const x = tx * TS, y = ty * TS, W = w * TS, base = (ty + h) * TS;
+  pell(c, x + W / 2, base + 2, W / 2 + 6, 5, 'rgba(10,6,24,.55)');
+  isSplit(c, f, W + 4, h * TS + 34, x - 2, y - 30, y, (g) => {
+    const ox = 2, top = 30;
+    px(g, ox - 1, top + 6, W + 2, h * TS - 6, OUT); px(g, ox, top + 7, W, h * TS - 8, '#24504A');
+    for (let i = 0; i < 40; i++) { const px0 = ox + 2 + ((r() * (W - 6)) | 0), py0 = top + 14 + ((r() * (h * TS - 22)) | 0), col = pick(['#7CFF6B', '#3DF2FF', '#FF9ACB', '#FFD23F', '#B9FF6B']); px(g, px0, py0, 3, 3, '#2F8F48'); px(g, px0 + 1, py0 - 1, 1, 1, col); }
+    for (let k = 0; k <= w * 2; k++) px(g, ox + k * 8, top + 6, 1, h * TS - 6, '#BFE8E0');
+    for (let yy = top + 16; yy < top + h * TS; yy += 12) px(g, ox, yy, W, 1, '#BFE8E0');
+    for (let i = 0; i <= 30; i++) { const hw = W / 2 * (i / 30); px(g, ox + W / 2 - hw - 1, i, hw * 2 + 2, 1, OUT); if (i > 0) { px(g, ox + W / 2 - hw, i, hw * 2, 1, i % 6 === 0 ? '#BFE8E0' : 'rgba(150,230,220,.55)'); } }
+    for (let k = -3; k <= 3; k++) for (let i = 0; i <= 30; i++) if (i * Math.abs(k) / 3 < 30) px(g, ox + W / 2 + k * (W / 6) * (i / 30), i, 1, 1, '#BFE8E0');
+    px(g, ox + W / 2 - 6, top + h * TS - 22, 12, 22, OUT); px(g, ox + W / 2 - 5, top + h * TS - 21, 10, 21, 'rgba(150,230,220,.6)');
+  });
+  for (let i = 0; i < 5; i++) m.lights.push({ x: x + 12 + i * (W - 24) / 4, y: y + 18, r: 20, col: pick(['#7CFF6B', '#3DF2FF', '#FF9ACB']), a: 0.45, fl: 2 });
+  for (let yy = ty; yy < ty + h; yy++) for (let xx = tx; xx < tx + w; xx++) setSolid(m, xx, yy);
+}
+// a stone windmill; its sails turn (drawn live)
+function isWindmill(c, f, m, r, tx, ty) {
+  const x = tx * TS, w = 3 * TS, base = (ty + 3) * TS;
+  pell(c, x + w / 2, base + 2, w / 2 + 6, 5, 'rgba(10,6,24,.55)');
+  isSplit(c, f, w + 20, 3 * TS + 50, x - 10, ty * TS - 50, ty * TS, (g) => {
+    const ox = 10, top = 50;
+    for (let yy = 22; yy < top + 3 * TS; yy++) { const t = (yy - 22) / (top + 3 * TS - 22), hw = Math.round(14 + t * 10); px(g, ox + w / 2 - hw - 1, yy, hw * 2 + 2, 1, OUT); for (let k = -hw; k < hw; k++) px(g, ox + w / 2 + k, yy, 1, 1, isStone((k + hw) / (hw * 2))); if (yy % 6 === 0) px(g, ox + w / 2 - hw, yy, hw * 2, 1, 'rgba(36,26,70,.3)'); }
+    isCone(g, { lights: [] }, ox + w / 2, 24, 18, 20, '#B8323A');
+    px(g, ox + w / 2 - 5, top + 3 * TS - 18, 10, 18, OUT); px(g, ox + w / 2 - 4, top + 3 * TS - 17, 8, 17, '#7A4A2E');
+    px(g, ox + w / 2 - 4, 46, 8, 9, OUT); px(g, ox + w / 2 - 3, 47, 6, 7, '#FFC870');
+  });
+  m.lights.push({ x: x + w / 2, y: ty * TS + 1, r: 16, col: '#FFB04A', a: 0.5, fl: 0 });
+  m.mill = { x: x + w / 2, y: ty * TS - 4, base };
+  for (let yy = ty; yy < ty + 3; yy++) for (let xx = tx; xx < tx + 3; xx++) setSolid(m, xx, yy);
+}
+// the Rainbow Express, parked at Moonspire Station
+function isTrain(g, x0, railY) {
+  const wheel = (x, rr) => { pell(g, x, railY - rr, rr + 1, rr + 1, OUT); pell(g, x, railY - rr, rr, rr, '#B8323A'); pell(g, x, railY - rr, rr * 0.45, rr * 0.45, '#FFD23F'); px(g, x - rr, railY - rr, rr * 2, 1, '#7A1A22'); };
+  // engine, facing west (home)
+  const ex = x0, eb = railY - 10;
+  px(g, ex + 6, eb - 22, 52, 22, OUT); for (let i = 0; i < 20; i++) px(g, ex + 7, eb - 21 + i, 50, 1, i < 4 ? '#4A2E8A' : i < 14 ? '#2E1A52' : '#22123E');
+  for (let i = 0; i < 6; i++) px(g, ex + 7, eb - 16 + i, 50, 1, RAINBOW[i]);
+  for (let k = 0; k < 4; k++) px(g, ex + 14 + k * 12, eb - 22, 2, 22, '#FFD23F');
+  px(g, ex + 54, eb - 38, 30, 38, OUT); px(g, ex + 55, eb - 37, 28, 37, '#B8323A'); px(g, ex + 55, eb - 37, 28, 3, '#E0505A'); px(g, ex + 52, eb - 41, 34, 4, OUT); px(g, ex + 53, eb - 40, 32, 3, '#2E1A52');
+  px(g, ex + 60, eb - 32, 18, 12, OUT); px(g, ex + 61, eb - 31, 16, 10, '#FFE2A0'); px(g, ex + 69, eb - 31, 1, 10, '#B8323A');
+  px(g, ex + 14, eb - 36, 9, 14, OUT); px(g, ex + 15, eb - 35, 7, 13, '#3A3355'); px(g, ex + 12, eb - 38, 13, 4, OUT); px(g, ex + 13, eb - 37, 11, 2, '#FFD23F');
+  pell(g, ex + 36, eb - 24, 6, 4, OUT); pell(g, ex + 36, eb - 24, 5, 3, '#FFD23F');
+  px(g, ex - 2, eb - 4, 10, 6, OUT); for (let i = 0; i < 5; i++) px(g, ex - 1 + i, eb - 3 + i, 10 - i, 1, '#B8323A');
+  pell(g, ex + 5, eb - 14, 4, 4, OUT); pell(g, ex + 5, eb - 14, 3, 3, '#FFF1A8');
+  for (const wx of [ex + 18, ex + 34, ex + 50]) wheel(wx, 7); wheel(ex + 72, 5);
+  px(g, ex + 14, railY - 8, 44, 2, '#C8C0E0');
+  // two coaches
+  for (let k = 0; k < 2; k++) {
+    const cx0 = x0 + 90 + k * 112, col = k ? '#2BA38F' : '#3D5BC9';
+    px(g, cx0, eb - 36, 106, 36, OUT); px(g, cx0 + 1, eb - 35, 104, 34, col); px(g, cx0 + 1, eb - 35, 104, 3, mixHex(col, '#FFFFFF', 0.3)); px(g, cx0 + 1, eb - 8, 104, 2, '#FFD23F');
+    pell(g, cx0 + 53, eb - 36, 54, 5, OUT); pell(g, cx0 + 53, eb - 36, 53, 4, '#2A2240');
+    for (let wx = cx0 + 8; wx < cx0 + 98; wx += 16) { px(g, wx - 1, eb - 29, 12, 13, OUT); px(g, wx, eb - 28, 10, 11, '#FFE2A0'); px(g, wx, eb - 28, 10, 3, '#FFF1C8'); if ((wx + k) % 3 === 0) { pell(g, wx + 5, eb - 19, 3, 3, '#8A6AC8'); px(g, wx + 4, eb - 23, 3, 2, '#8A6AC8'); } }
+    wheel(cx0 + 16, 6); wheel(cx0 + 32, 6); wheel(cx0 + 74, 6); wheel(cx0 + 90, 6);
+    px(g, cx0 - 6, eb - 12, 6, 3, OUT);
+  }
+}
+function buildIsle() {
+  isleSprites();
+  const W = ISLE.w, H = ISLE.h, m = isMap(W, H, { landId: 'isle', name: 'Moonspire Isle', dusk: '#B8AAEA', music: 'isle', isle: true });
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(808);
+  const land = (tx, ty) => {
+    if (ty >= 36 && ty <= 41 && tx >= 10 && tx <= 47) return true;
+    const k = 1 + 0.04 * Math.sin(tx * 0.7) + 0.035 * Math.sin(ty * 0.9 + 1), dx = (tx + 0.5 - 30) / (28.5 * k), dy = (ty + 0.5 - 21) / (20.6 * k);
+    return dx ** 4 + dy ** 4 <= 1;
+  };
+  const LAND = []; for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) LAND[ty * W + tx] = land(tx, ty);
+  const L = (tx, ty) => tx >= 0 && ty >= 0 && tx < W && ty < H && LAND[ty * W + tx];
+  const lake = (tx, ty) => ((tx + 0.5 - 8) / 5.2) ** 2 + ((ty + 0.5 - 10.5) / 4.6) ** 2 <= 1;
+  const dock = (tx, ty) => tx === 8 && ty >= 12 && ty <= 15;
+  const GR = ['#2E5E4A', '#26503F', '#376C54', '#4E9A6E', '#7CC88A', ['#FFFFFF', '#FF9ACB', '#9FD8FF', '#FFE45C']];
+  const busy = new Set(), mark = (tx, ty) => busy.add(tx + ',' + ty), isBusy = (tx, ty) => busy.has(tx + ',' + ty);
+  // sea, sand and grass
+  const grassTiles = [];
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    const x = tx * TS, y = ty * TS;
+    if (!L(tx, ty) || lake(tx, ty) && !dock(tx, ty)) {
+      let d = 9; for (let k = 1; k <= 3 && d === 9; k++) for (let j = -k; j <= k; j++) for (let i = -k; i <= k; i++) if (L(tx + i, ty + j) && !lake(tx + i, ty + j)) d = Math.min(d, k);
+      const inLake = L(tx, ty);
+      px(c, x, y, TS, TS, inLake ? (d <= 1 ? '#2A62A8' : '#1F4C90') : d <= 1 ? '#2E6FB0' : d <= 2 ? '#23549C' : '#1A3A80');
+      for (let i = 0; i < 3; i++) if (r() < 0.6) px(c, x + ((r() * 12) | 0), y + ((r() * 15) | 0), 3 + ((r() * 4) | 0), 1, inLake ? '#3A7CC0' : d <= 2 ? '#3F86C8' : '#2A54A0');
+      setSolid(m, tx, ty, 5); m.water.push([tx, ty]);
+      continue;
+    }
+    let shore = false; for (const [i, j] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!L(tx + i, ty + j)) shore = true;
+    if (shore && ty < 36) {
+      px(c, x, y, TS, TS, '#CDB98A'); for (let i = 0; i < 8; i++) px(c, x + ((r() * 15) | 0), y + ((r() * 15) | 0), 2, 1, r() < 0.5 ? '#B8A272' : '#E0CFA0');
+      if (r() < 0.25) { const xx = x + 3 + ((r() * 8) | 0), yy = y + 4 + ((r() * 8) | 0); pell(c, xx, yy, 3, 2, '#6A6488'); px(c, xx - 1, yy - 1, 2, 1, '#9A94B8'); }
+      if (r() < 0.2) { const xx = x + ((r() * 12) | 0), yy = y + ((r() * 12) | 0); px(c, xx, yy, 3, 2, '#FF9AB8'); px(c, xx + 1, yy, 1, 1, '#FFFFFF'); }
+    } else grassTiles.push([tx, ty]);
+  }
+  isGrassBase(c, grassTiles, r, GR);
+  for (const [tx, ty] of grassTiles) isGrass(c, m, r, tx, ty, GR);
+  // foam where the sea meets the sand, and soft grass edges on the sand
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    if (L(tx, ty) && !lake(tx, ty)) continue;
+    const x = tx * TS, y = ty * TS;
+    if (L(tx, ty - 1) && !lake(tx, ty - 1)) for (let i = 0; i < TS; i++) px(c, x + i, y + (Math.sin((x + i) * 0.4) > 0.3 ? 1 : 0), 1, 2, '#BDF4FF');
+    if (L(tx, ty + 1) && !lake(tx, ty + 1)) px(c, x, y + TS - 2, TS, 2, '#BDF4FF');
+    if (L(tx - 1, ty) && !lake(tx - 1, ty)) px(c, x, y, 2, TS, '#BDF4FF');
+    if (L(tx + 1, ty) && !lake(tx + 1, ty)) px(c, x + TS - 2, y, 2, TS, '#BDF4FF');
+  }
+  // lily pads, reeds and a little rowboat on the lake
+  for (let i = 0; i < 9; i++) { const a = r() * Math.PI * 2, d = 0.4 + r() * 0.45, x = (8 + Math.cos(a) * 5.2 * d) * TS, y = (10.5 + Math.sin(a) * 4.6 * d) * TS; pell(c, x, y, 4, 2.5, '#2F8F48'); px(c, x, y - 1, 2, 1, '#1F4C90'); if (i % 3 === 0) { px(c, x - 1, y - 3, 3, 2, '#FF9ACB'); m.lights.push({ x, y: y - 2, r: 9, col: '#FF9ACB', a: 0.5, fl: 1 }); } }
+  for (let i = 0; i < 14; i++) { const a = r() * Math.PI * 2, x = (8 + Math.cos(a) * 5.1) * TS, y = (10.5 + Math.sin(a) * 4.5) * TS; if (Math.abs(x - 8.5 * TS) < 14 && y > 12 * TS) continue; for (let k = 0; k < 3; k++) { px(c, x + k * 2, y - 6 - k, 1, 7 + k, '#3E7A3E'); px(c, x + k * 2, y - 7 - k, 1, 2, '#8A5A3A'); } }
+  { const x = 5 * TS, y = 8 * TS; pell(c, x + 10, y + 7, 13, 4, 'rgba(0,0,30,.4)'); pell(c, x + 10, y + 4, 12, 4, OUT); pell(c, x + 10, y + 4, 11, 3, '#9A6A45'); pell(c, x + 10, y + 3, 9, 2, '#6B4A32'); px(c, x + 6, y + 2, 1, 3, '#B5835A'); px(c, x + 14, y + 2, 1, 3, '#B5835A'); }
+  for (let ty = 12; ty <= 15; ty++) { plankTile(c, 8, ty, r, true); setSolid(m, 8, ty, 0); m.water = m.water.filter(([a, b]) => !(a === 8 && b === ty)); for (const xx of [8 * TS, 9 * TS - 2]) px(c, xx, ty * TS, 2, TS, '#5A3A2E'); }
+  for (let ty = 12; ty <= 15; ty++) mark(8, ty);
+  // the railway over the long land bridge, and the station platform
+  for (let tx = 0; tx < 48; tx++) for (const ty of [40, 41]) {
+    const x = tx * TS, y = ty * TS;
+    if (!L(tx, ty) && ty === 41) { px(c, x, y + TS, TS, 6, '#5E5688'); if (tx % 2 === 0) { pell(c, x + TS, y + TS + 14, 11, 9, '#1A3A80'); } }
+    px(c, x, y, TS, TS, '#4A4258'); for (let i = 0; i < 6; i++) px(c, x + ((r() * 15) | 0), y + ((r() * 15) | 0), 2, 1, r() < 0.5 ? '#3A3348' : '#5E5670');
+    setSolid(m, tx, ty, L(tx, ty) ? 1 : 5);
+  }
+  for (let x = 0; x < 48 * TS; x += 6) { px(c, x, 40 * TS + 2, 3, 28, '#6B4A32'); px(c, x, 40 * TS + 2, 3, 1, '#8A6A50'); }
+  for (const ry of [40 * TS + 7, 41 * TS + 10]) { px(c, 0, ry, 48 * TS, 2, '#C8C0E0'); px(c, 0, ry + 2, 48 * TS, 1, '#6A6488'); }
+  for (let ty = 37; ty <= 39; ty++) for (let tx = 11; tx <= 46; tx++) {
+    const x = tx * TS, y = ty * TS; px(c, x, y, TS, TS, '#8A82B0'); px(c, x, y, TS, 1, '#6A6290'); px(c, x, y, 1, TS, '#6A6290'); px(c, x + 1, y + 1, TS - 2, 1, '#A8A0CC');
+    if (r() < 0.3) px(c, x + 3 + ((r() * 9) | 0), y + 4 + ((r() * 9) | 0), 2, 1, '#6A6290'); mark(tx, ty);
+  }
+  px(c, 11 * TS, 40 * TS - 3, 36 * TS, 3, '#FFD23F'); px(c, 11 * TS, 40 * TS, 36 * TS, 1, OUT);
+  isSplit(c, f, 320, 60, 13 * TS, 40 * TS - 44, 40 * TS, (g) => isTrain(g, 0, 59));
+  // the station house with a clock
+  const st = isCottage(c, f, m, 35, 34, 5, 3, { roof: '#2BA38F', wall: '#E8E0F5', beam: '#3A2A5A', sign: (g, x, y) => { px(g, x - 3, y - 1, 7, 3, '#3D5BC9'); px(g, x - 3, y + 2, 2, 1, OUT); px(g, x + 2, y + 2, 2, 1, OUT); } });
+  { const x = 37.5 * TS, y = 34 * TS - 24; pell(f, x, y, 7, 7, OUT); pell(f, x, y, 6, 6, '#FFF1C8'); px(f, x, y - 4, 1, 4, OUT); px(f, x, y, 3, 1, OUT); m.lights.push({ x, y, r: 16, col: '#FFF1C8', a: 0.5, fl: 0 }); }
+  for (let ty = 34; ty <= 36; ty++) for (let tx = 35; tx <= 39; tx++) mark(tx, ty);
+  m.mat = { x: 42 * TS + 8, y: 38 * TS + 8 };
+  { const x = 42 * TS, y = 38 * TS; for (let i = 0; i < 6; i++) px(c, x + 1, y + 2 + i * 2, 14, 2, RAINBOW[i]); px(c, x, y + 1, 16, 1, OUT); px(c, x, y + 14, 16, 1, OUT); }
+  // cobbled avenue from the station to the castle, the plaza and the lanes
+  const cob = (tx, ty) => { if (!L(tx, ty) || solidAt(m, tx, ty)) return; isCobble(c, r, tx, ty); mark(tx, ty); };
+  for (let ty = 12; ty <= 36; ty++) { cob(29, ty); cob(30, ty); }
+  const PCX = 30, PCY = 26.5, inPlaza = (tx, ty) => ((tx + 0.5 - PCX) / 7.2) ** 2 + ((ty + 0.5 - PCY) / 4.6) ** 2 <= 1;
+  for (let ty = 21; ty <= 32; ty++) for (let tx = 22; tx <= 38; tx++) if (inPlaza(tx, ty)) cob(tx, ty);
+  for (let tx = 4; tx <= 57; tx++) for (const ty of [26, 27]) if (!inPlaza(tx, ty)) cob(tx, ty);
+  for (let ty = 12; ty <= 13; ty++) for (let tx = 18; tx <= 41; tx++) cob(tx, ty);
+  for (let ty = 16; ty <= 25; ty++) { cob(9, ty); cob(10, ty); }
+  for (let ty = 10; ty <= 25; ty++) { cob(48, ty); }
+  // a ring of gold tiles around the moon fountain
+  for (let k = 0; k < 80; k++) { const a = k / 80 * Math.PI * 2, x = PCX * TS + Math.cos(a) * 70, y = PCY * TS + Math.sin(a) * 44; px(c, Math.round(x), Math.round(y), 2, 2, k % 2 ? '#FFD23F' : '#C9BFFF'); }
+  // the castle and its gardens
+  isCastle(c, m, r);
+  for (let ty = 12; ty <= 13; ty++) for (let tx = 15; tx <= 44; tx++) mark(tx, ty);
+  isHedge(c, f, m, 16, 15, 25, ['#FF9ACB', '#FFD23F']); isHedge(c, f, m, 34, 15, 43, ['#9FD8FF', '#FF9ACB']);
+  for (let tx = 16; tx <= 43; tx++) mark(tx, 15);
+  for (const [tx0, tx1] of [[17, 24], [35, 42]]) for (let tx = tx0; tx <= tx1; tx++) {
+    const x = tx * TS, y = 16 * TS; px(c, x, y + 2, TS, 12, '#4A3A2E'); for (let i = 0; i < 5; i++) { const col = RAINBOW[(tx + i) % 6], fx = x + 1 + i * 3, fy = y + 4 + (i % 2) * 5; px(c, fx, fy + 2, 1, 3, '#3E9A4A'); px(c, fx - 1, fy, 3, 2, col); px(c, fx, fy, 1, 1, '#FFFFFF'); m.flowers.push([fx, fy, col]); }
+    mark(tx, 16);
+  }
+  // owl statues by the castle steps
+  for (const tx of [27, 32]) {
+    const x = tx * TS + 8, y = 13 * TS + 14;
+    pell(c, x, y + 1, 8, 2, 'rgba(10,6,24,.5)'); px(c, x - 6, y - 8, 12, 9, OUT); px(c, x - 5, y - 7, 10, 8, '#857BB8'); px(c, x - 5, y - 7, 10, 2, '#A39AD0');
+    isSplit(c, f, 16, 22, x - 8, y - 28, 13 * TS, (g) => { pell(g, 8, 12, 6, 7, OUT); pell(g, 8, 12, 5, 6, '#A39AD0'); pell(g, 8, 6, 5, 4.5, OUT); pell(g, 8, 6, 4, 3.5, '#A39AD0'); px(g, 4, 1, 2, 3, '#A39AD0'); px(g, 10, 1, 2, 3, '#A39AD0'); px(g, 5, 5, 2, 2, '#3DF2FF'); px(g, 9, 5, 2, 2, '#3DF2FF'); px(g, 7, 7, 2, 1, '#FFD23F'); pell(g, 7, 14, 3, 3, '#857BB8'); });
+    m.lights.push({ x: x - 2, y: y - 22, r: 8, col: '#3DF2FF', a: 0.6, fl: 1 }, { x: x + 2, y: y - 22, r: 8, col: '#3DF2FF', a: 0.6, fl: 1 });
+    setSolid(m, tx, 13);
+  }
+  // the village around the plaza
+  const sign = { letter: (g, x, y) => { px(g, x - 4, y - 3, 9, 6, '#F5F0E0'); px(g, x - 1, y - 1, 3, 2, '#E8413A'); }, bun: (g, x, y) => { pell(g, x, y, 4, 3, '#E0A050'); px(g, x - 2, y - 1, 4, 1, '#FFF1C8'); }, bottle: (g, x, y) => { px(g, x - 1, y - 4, 2, 2, '#C8C0E0'); pell(g, x, y + 1, 3.5, 3, '#7CFF6B'); px(g, x - 1, y, 1, 1, '#FFFFFF'); } };
+  m.post = isCottage(c, f, m, 15, 21, 5, 3, { roof: '#2F5BD9', sign: sign.letter, lean: -3 });
+  m.bakery = isCottage(c, f, m, 15, 29, 5, 3, { roof: '#C8553A', wall: '#F2E2C0', sign: sign.bun, flowers: ['#FFD23F', '#FF9F1C', '#FFFFFF'] });
+  m.potion = isCottage(c, f, m, 40, 21, 5, 3, { roof: '#7B3FE4', wall: '#D8E8D0', beam: '#3A2A5A', sign: sign.bottle, lean: 4, flowers: ['#7CFF6B', '#C77DFF', '#3DF2FF'] });
+  m.home2 = isCottage(c, f, m, 40, 29, 5, 3, { roof: '#2BA38F', lean: -2 });
+  isCottage(c, f, m, 3, 29, 4, 3, { roof: '#B8323A', lean: 2 });
+  isCottage(c, f, m, 52, 29, 4, 3, { roof: '#3D5BC9', wall: '#F0E6D8', lean: -3 });
+  isCottage(c, f, m, 53, 21, 3, 3, { roof: '#9B5DE5', roofH: 40 });
+  isWindmill(c, f, m, r, 4, 19); isStarTower(c, f, m, r, 50, 5);
+  isGreenhouse(c, f, m, r, 51, 12, 5, 2);
+  for (const [tx, ty, w, h] of [[15, 21, 5, 3], [15, 29, 5, 3], [40, 21, 5, 3], [40, 29, 5, 3], [3, 29, 4, 3], [52, 29, 4, 3], [53, 21, 3, 3], [4, 19, 3, 3], [50, 5, 3, 4], [51, 12, 5, 2]])
+    for (let yy = ty - 3; yy < ty + h + 1; yy++) for (let xx = tx - 1; xx <= tx + w; xx++) mark(xx, yy);
+  // the moon fountain in the middle of the plaza
+  { const x = PCX * TS, y = 27 * TS + 2;
+    pell(c, x, y + 4, 26, 12, 'rgba(10,6,24,.5)'); pell(c, x, y, 25, 13, OUT); pell(c, x, y, 24, 12, '#A39AD0'); pell(c, x, y - 1, 21, 10, '#4F7FD8'); pell(c, x - 4, y - 3, 12, 5, '#6FA4F0'); pell(c, x, y + 9, 22, 3, '#857BB8');
+    isSplit(c, f, 30, 50, x - 15, y - 46, 26 * TS, (g) => { px(g, 12, 18, 6, 30, OUT); px(g, 13, 18, 4, 30, '#C2BAE6'); px(g, 15, 18, 2, 30, '#857BB8'); px(g, 9, 16, 12, 3, OUT); px(g, 10, 16, 10, 2, '#FFD23F');
+      pell(g, 15, 8, 9, 9, OUT); pell(g, 15, 8, 8, 8, '#FFF1A8'); pell(g, 12, 9, 2, 2, '#E8D890'); g.globalCompositeOperation = 'destination-out'; pell(g, 20, 5, 7, 7, '#000'); g.globalCompositeOperation = 'source-over'; });
+    m.lights.push({ x: x - 2, y: y - 38, r: 36, col: '#FFF1A8', a: 0.7, fl: 2 }, { x, y, r: 30, col: '#5FD8FF', a: 0.35, fl: 1 });
+    m.fountain = { x, y: y - 26 };
+    for (const [tx, ty] of [[28, 26], [29, 26], [30, 26], [31, 26], [28, 27], [29, 27], [30, 27], [31, 27]]) setSolid(m, tx, ty);
+  }
+  // lamps, bunting and floating lanterns
+  for (const [tx, ty, col] of [[28, 17, '#FFC870'], [31, 17, '#FFC870'], [28, 33, '#FFC870'], [31, 33, '#FFC870'], [24, 23, '#C9BFFF'], [35, 23, '#C9BFFF'], [24, 30, '#FF9ACB'], [35, 30, '#7FE8FF'], [12, 25, '#FFC870'], [47, 25, '#FFC870'], [12, 28, '#FFC870'], [47, 28, '#FFC870'], [19, 13, '#FFC870'], [40, 13, '#FFC870'], [33, 36, '#FFC870'], [26, 36, '#FFC870']]) { isLamp(c, f, m, tx, ty, col); mark(tx, ty); }
+  bunting(f, m, 24 * TS + 8, 23 * TS - 16, 35 * TS + 8, 23 * TS - 16, RAINBOW, true);
+  bunting(f, m, 24 * TS + 8, 30 * TS - 16, 35 * TS + 8, 30 * TS - 16, ['#FFD23F', '#C9BFFF', '#FF9ACB', '#7FE8FF'], true);
+  m.floaters = Array.from({ length: 14 }, (_, i) => ({ x: (22 + r() * 16) * TS, y: (19 + r() * 12) * TS, ph: r() * 6, col: i % 3 ? '#FFC870' : '#FF9ACB' }));
+  // pumpkin patch with a friendly scarecrow
+  for (let ty = 33; ty <= 35; ty++) for (let tx = 4; tx <= 10; tx++) {
+    const x = tx * TS, y = ty * TS; px(c, x, y, TS, TS, '#4A3428'); for (let k = 0; k < TS; k += 4) px(c, x, y + k, TS, 1, '#3A281E');
+    if ((tx + ty) % 2 === 0) { pell(c, x + 8, y + 9, 6, 4.5, OUT); pell(c, x + 8, y + 9, 5, 3.5, '#FF9F1C'); px(c, x + 5, y + 7, 1, 5, '#E07A10'); px(c, x + 10, y + 7, 1, 5, '#E07A10'); px(c, x + 7, y + 3, 2, 3, '#3E9A4A'); if ((tx * ty) % 3 === 0) { px(c, x + 5, y + 8, 2, 1, '#FFE45C'); px(c, x + 9, y + 8, 2, 1, '#FFE45C'); px(c, x + 6, y + 11, 4, 1, '#FFE45C'); m.lights.push({ x: x + 8, y: y + 9, r: 10, col: '#FF9F1C', a: 0.5, fl: 2 }); } }
+    mark(tx, ty);
+  }
+  { const x = 11 * TS + 8, y = 34 * TS + 14; isSplit(c, f, 24, 36, x - 12, y - 34, 34 * TS, (g) => { px(g, 11, 6, 2, 28, '#6B4A32'); px(g, 2, 12, 20, 2, '#6B4A32'); pell(g, 12, 6, 5, 5, OUT); pell(g, 12, 6, 4, 4, '#F0D090'); px(g, 10, 5, 1, 1, EYE); px(g, 14, 5, 1, 1, EYE); px(g, 10, 8, 5, 1, EYE); px(g, 6, 0, 12, 2, '#5B2A9E'); px(g, 9, -2, 6, 3, '#5B2A9E'); px(g, 6, 11, 12, 10, '#3D5BC9'); px(g, 6, 15, 12, 2, '#FFD23F'); px(g, 2, 10, 4, 4, '#E8D49A'); px(g, 18, 10, 4, 4, '#E8D49A'); }); setSolid(m, 11, 34); mark(11, 34); }
+  // the graveyard gate on the east side
+  { const x = 56 * TS, y = 25 * TS;
+    for (const gx of [x - 2, x + 2 * TS - 6]) { px(c, gx, y - 10, 8, 3 * TS + 10, OUT); px(c, gx + 1, y - 9, 6, 3 * TS + 8, '#857BB8'); px(c, gx + 1, y - 9, 6, 2, '#C2BAE6'); px(c, gx + 2, y - 14, 4, 4, '#3DF2FF'); m.lights.push({ x: gx + 4, y: y - 12, r: 16, col: '#3DF2FF', a: 0.6, fl: 2 }); }
+    for (let k = 0; k < 2 * TS; k += 2) px(f, x + k - 2, y - 18 - Math.round(Math.sin(k / (2 * TS) * Math.PI) * 6), 2, 3, '#2A2240');
+    px(f, x + 4, y - 30, 22, 10, OUT); px(f, x + 5, y - 29, 20, 8, '#8A5A3A'); px(f, x + 9, y - 27, 5, 5, '#C8F5E2'); px(f, x + 10, y - 26, 1, 1, EYE); px(f, x + 12, y - 26, 1, 1, EYE); px(f, x + 16, y - 27, 7, 1, '#FFF1C8'); px(f, x + 16, y - 25, 6, 1, '#FFF1C8');
+    setSolid(m, 56, 24); setSolid(m, 57, 24); setSolid(m, 56, 28); setSolid(m, 57, 28);
+    for (let ty = 23; ty <= 29; ty++) for (let tx = 54; tx <= 59; tx++) mark(tx, ty);
+  }
+  // trees: a frame of pines along the shore, big round trees and blossoms in between
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    if (!L(tx, ty) || lake(tx, ty) || solidAt(m, tx, ty) || isBusy(tx, ty) || ty < 12 && tx >= 13 && tx <= 46 || ty >= 36) continue;
+    let near = false; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (isBusy(tx + i, ty + j)) near = true;
+    let shore = false; for (const [i, j] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!L(tx + i, ty + j)) shore = true;
+    if (shore) continue;
+    let edge = false; for (const [i, j] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) if (!L(tx + i, ty + j)) edge = true;
+    const p = edge ? 0.45 : near ? 0.02 : 0.09;
+    if (r() < p && !solidAt(m, tx - 1, ty) && !solidAt(m, tx, ty - 1) && !solidAt(m, tx - 1, ty - 1) && !solidAt(m, tx + 1, ty - 1)) {
+      const style = edge && r() < 0.6 ? 'pine' : r() < 0.18 ? 'blossom' : r() < 0.1 ? 'gold' : 'moon';
+      isTree(c, f, m, tx, ty, style, r);
+    }
+  }
+  // bushes to smash for coins (one hides a secret)
+  m.bushes = [[13, 23], [46, 23], [21, 34], [37, 35], [45, 17], [13, 17], [26, 19], [34, 19], [55, 18], [5, 24]]
+    .filter(([tx, ty]) => L(tx, ty) && !solidAt(m, tx, ty)).map(([tx, ty], i) => ({ tx, ty, alive: true, secret: i === 8, t: 0 }));
+  m.bushes.forEach(b => setSolid(m, b.tx, b.ty, 2));
+  // ways in and out
+  m.entries = { train: { x: 41 * TS, y: 38 * TS + 8, face: 'up' }, grave: { x: 55 * TS, y: 27 * TS, face: 'sideL' }, hall: { x: 30 * TS, y: 13 * TS + 4, face: 'down' } };
+  m.exits = [{ test: h => h.x > 57.6 * TS && h.y > 25 * TS && h.y < 28 * TS, to: 'grave', entry: 'isle' }];
+  if (flags.isle_gate) for (const [tx, ty] of m.gate.tiles) setSolid(m, tx, ty, 0);
+  // things to find
+  m.isItems = [
+    { id: 'pip_0', kind: 'letter', tx: 9, ty: 17 }, { id: 'pip_1', kind: 'letter', tx: 8, ty: 23 }, { id: 'pip_2', kind: 'letter', tx: 47, ty: 10 },
+    { id: 'pip_3', kind: 'letter', tx: 54, ty: 25 }, { id: 'pip_4', kind: 'letter', tx: 18, ty: 14 },
+    { id: 'ing_star', kind: 'starflower', tx: 22, ty: 17 }, { id: 'ing_pearl', kind: 'pearl', tx: 8, ty: 12 },
+  ];
+  for (const it of m.isItems) { if (solidAt(m, it.tx, it.ty)) { const t = nearestFreeTile(m, it.tx, it.ty); if (t) { it.tx = t[0]; it.ty = t[1]; } } it.x = it.tx * TS + 8; it.y = it.ty * TS + 12; }
+  return m;
+}
+
+// ---------------------------------------------------------------- the Moonlit Graveyard: sleepy, silly, not scary
+const EPITAPHS = [
+  'Here naps Sir Snores-a-Lot. Please do not wake him. He is very grumpy before breakfast.',
+  'Grandma Boo. She made the best pumpkin pie on the whole island.',
+  'Professor Fizzwick. His last spell turned his hat into a frog. The frog is still teaching.',
+  'Biscuit the cat. Nine lives, and she used every single one for naps.',
+  'Here lies Lord Wobblebottom. He loved jelly. Jelly loved him back.',
+  'Gone fishing. Back in a hundred years! -- Old Ned',
+];
+function isWillow(c, f, m, tx, ty, r) {
+  const x = tx * TS + 8, y = ty * TS + 14;
+  pell(c, x + 2, y + 1, 14, 3, 'rgba(10,6,24,.5)');
+  px(c, x - 5, y - 16, 10, 17, OUT); px(c, x - 4, y - 16, 8, 16, '#4A3A50'); px(c, x + 1, y - 16, 3, 16, '#32263A'); px(c, x - 8, y - 1, 5, 2, '#4A3A50'); px(c, x + 4, y - 1, 5, 2, '#32263A');
+  const cy = y - 34;
+  pell(f, x, cy, 26, 16, OUT); pell(f, x, cy, 25, 15, '#1F4A4A'); pell(f, x - 3, cy - 4, 18, 9, '#2E6A60'); pell(f, x - 7, cy - 7, 8, 4, '#5FA890');
+  for (let i = 0; i < 34; i++) { const sx = Math.round(x - 24 + i * 1.45), top = cy + 4 + Math.round(Math.sin(i * 0.9) * 3), len = 14 + ((r() * 18) | 0); px(f, sx, top, 1, len, i % 3 ? '#2E6A60' : '#3E8A70'); if (i % 4 === 0) px(f, sx, top + len, 1, 2, '#9FE0C8'); }
+  for (let i = 0; i < 6; i++) { const fx = x - 18 + ((r() * 36) | 0), fy = cy + 10 + ((r() * 18) | 0); m.lights.push({ x: fx, y: fy, r: 8, col: '#9FE0C8', a: 0.6, fl: 2 }); }
+  setSolid(m, tx, ty);
+}
+function isGrave(c, f, m, tx, ty, kind, r, i) {
+  const x = tx * TS + 8, y = ty * TS + 14;
+  pell(c, x, y + 1, 8, 2, 'rgba(10,6,24,.55)');
+  px(c, x - 6, y - 2, 12, 3, '#3A5A40'); for (let k = 0; k < 5; k++) px(c, x - 5 + k * 2, y - 3, 1, 2, '#5BAA6A');
+  isSplit(c, f, 20, 28, x - 10, y - 26, ty * TS, (g) => {
+    const S = ['#B4ACD8', '#968CC4', '#6E6698'];
+    if (kind === 0) { pell(g, 10, 10, 7, 7, OUT); px(g, 3, 10, 15, 15, OUT); pell(g, 10, 10, 6, 6, S[1]); px(g, 4, 10, 13, 14, S[1]); px(g, 4, 10, 3, 14, S[0]); px(g, 14, 10, 3, 14, S[2]); }
+    else if (kind === 1) { px(g, 5, 2, 11, 23, OUT); px(g, 6, 3, 9, 21, S[1]); px(g, 6, 3, 2, 21, S[0]); px(g, 12, 3, 3, 21, S[2]); px(g, 4, 0, 13, 4, OUT); px(g, 5, 1, 11, 2, S[0]); }
+    else if (kind === 2) { pell(g, 10, 9, 7, 7, OUT); px(g, 3, 9, 15, 16, OUT); pell(g, 10, 9, 6, 6, S[0]); px(g, 4, 9, 13, 15, S[0]); for (let k = 0; k < 4; k++) px(g, 4 + k * 4, 22, 2, 2, OUT); px(g, 7, 9, 2, 2, EYE); px(g, 12, 9, 2, 2, EYE); px(g, 8, 13, 5, 1, EYE); px(g, 14, 9, 3, 15, S[1]); }
+    else { px(g, 2, 8, 17, 17, OUT); px(g, 3, 9, 15, 15, S[1]); px(g, 3, 9, 15, 2, S[0]); px(g, 15, 9, 3, 15, S[2]); px(g, 8, 4, 5, 5, OUT); px(g, 9, 5, 3, 4, S[0]); }
+    for (let k = 0; k < 3; k++) px(g, 6 + k * 2 + (kind === 1 ? 1 : 0), 14 + k * 3, 6 - k, 1, '#544C80');
+    for (let k = 0; k < 5; k++) { const mx = 3 + ((r() * 13) | 0), my = 18 + ((r() * 6) | 0); px(g, mx, my, 2, 1, '#3E8A60'); }
+    if (i % 3 === 0) { px(g, 1, 22, 3, 2, '#FF9ACB'); px(g, 2, 21, 1, 1, '#FFFFFF'); px(g, 16, 23, 3, 2, '#9FD8FF'); }
+  });
+  if (i % 2 === 0) { const cx0 = x + (i % 4 ? 7 : -8); px(c, cx0, y - 5, 2, 4, '#F5F0E0'); px(c, cx0, y - 7, 2, 2, '#FFD23F'); m.lights.push({ x: cx0 + 1, y: y - 7, r: 12, col: '#FFC870', a: 0.6, fl: 2 }); }
+  setSolid(m, tx, ty);
+}
+function buildGrave() {
+  isleSprites();
+  const W = 36, H = 26, m = isMap(W, H, { landId: 'grave', name: 'Moonlit Graveyard', dusk: '#968CD8', music: 'grave', isle: true, grave: true });
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(1313);
+  const GR = ['#264A4E', '#1F4044', '#2E585C', '#3E7A70', '#6AB8A0', ['#9FD8FF', '#C9BFFF', '#FFFFFF']];
+  const gt = []; for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) gt.push([tx, ty]);
+  isGrassBase(c, gt, r, GR); for (const [tx, ty] of gt) isGrass(c, m, r, tx, ty, GR);
+  const dirt = (tx, ty) => { const x = tx * TS, y = ty * TS; px(c, x, y, TS, TS, '#4A3E52'); for (let i = 0; i < 7; i++) px(c, x + ((r() * 15) | 0), y + ((r() * 15) | 0), 2, 1, r() < 0.5 ? '#3A3044' : '#5E5068'); if (r() < 0.3) { px(c, x + ((r() * 12) | 0), y + ((r() * 12) | 0), 2, 2, '#6E6698'); } };
+  const path = new Set();
+  for (let tx = 0; tx <= 30; tx++) for (const ty of [12, 13]) { dirt(tx, ty); path.add(tx + ',' + ty); }
+  for (let ty = 6; ty <= 23; ty++) for (const tx of [17, 18]) { dirt(tx, ty); path.add(tx + ',' + ty); }
+  edgeTufts(c, path, r, '#3E7A70', '#2E585C');
+  // iron fence all round, with the gate to the west
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x < 2 || y < 2 || x >= W - 2 || y >= H - 2) && !(x < 2 && (y === 12 || y === 13))) setSolid(m, x, y);
+  const spike = (cv, x, y) => { px(cv, x, y - 14, 2, 14, '#2A2240'); px(cv, x - 1, y - 16, 4, 2, '#2A2240'); px(cv, x, y - 18, 2, 2, '#4B4470'); };
+  for (let x = 1 * TS; x < (W - 1) * TS; x += 6) { spike(c, x, 2 * TS - 2); spike(f, x, (H - 1) * TS); }
+  for (let y = 2 * TS; y < (H - 1) * TS; y += 6) { if (y >= 12 * TS - 4 && y < 14 * TS + 4) continue; spike(c, 1 * TS + 6, y); spike(c, (W - 1) * TS - 6, y); }
+  for (const yy of [2 * TS - 12, 2 * TS - 4]) px(c, TS, yy, (W - 2) * TS, 1, '#2A2240');
+  for (const yy of [(H - 1) * TS - 12, (H - 1) * TS - 4]) px(f, TS, yy, (W - 2) * TS, 1, '#2A2240');
+  for (const gy of [12 * TS - 8, 14 * TS + 2]) { px(c, TS + 2, gy - 18, 10, 26, OUT); px(c, TS + 3, gy - 17, 8, 24, '#857BB8'); px(c, TS + 5, gy - 22, 4, 4, '#3DF2FF'); m.lights.push({ x: TS + 7, y: gy - 20, r: 16, col: '#3DF2FF', a: 0.6, fl: 2 }); }
+  // dark pines beyond the fence
+  for (let x = 0; x < W; x += 2) isTree(c, f, m, x, 0, 'pine', r);
+  // the little chapel with a rainbow round window and a bell
+  { const tx = 15, ty = 2, w = 5, x = tx * TS, base = (ty + 4) * TS;
+    pell(c, x + w * TS / 2, base + 2, w * TS / 2 + 6, 5, 'rgba(10,6,24,.55)');
+    isSplit(c, f, w * TS + 20, 4 * TS + 50, x - 10, ty * TS - 50, ty * TS, (g) => {
+      const ox = 10, top = 50;
+      isTower(g, { lights: [] }, r, ox, w * TS, top + 18, top + 4 * TS, { ivy: 26 });
+      for (let i = 0; i <= 30; i++) { const hw = Math.round((w * TS / 2 + 5) * i / 30); px(g, ox + w * TS / 2 - hw - 1, top - 12 + i, hw * 2 + 2, 1, OUT); px(g, ox + w * TS / 2 - hw, top - 12 + i, hw * 2, 1, i % 4 === 3 ? '#1F2A66' : '#2F3F8C'); px(g, ox + w * TS / 2 - hw, top - 12 + i, Math.round(hw * 0.5), 1, '#4D63B8'); }
+      isTower(g, { lights: [] }, r, ox + w * TS / 2 - 8, 16, 14, top - 6, {});
+      isCone(g, { lights: [] }, ox + w * TS / 2, 14, 11, 14, '#2F3F8C');
+      px(g, ox + w * TS / 2 - 4, 22, 8, 9, '#1A1430'); px(g, ox + w * TS / 2 - 3, 24, 6, 6, '#FFD23F');
+      const rx = ox + w * TS / 2, ry = top + 30; pell(g, rx, ry, 9, 9, OUT);
+      for (let yy = -8; yy <= 8; yy++) for (let xx = -8; xx <= 8; xx++) { const d = Math.hypot(xx, yy); if (d > 8) continue; const a = (Math.atan2(yy, xx) + Math.PI) / (Math.PI * 2); px(g, rx + xx, ry + yy, 1, 1, d < 2 ? '#FFF1A8' : RAINBOW[Math.floor(a * 6) % 6]); }
+      px(g, rx - 8, top + 4 * TS - 26, 16, 26, OUT); pell(g, rx, top + 4 * TS - 26, 8, 6, OUT); px(g, rx - 7, top + 4 * TS - 25, 14, 25, '#5A3A2E'); pell(g, rx, top + 4 * TS - 25, 7, 5, '#5A3A2E'); px(g, rx - 1, top + 4 * TS - 28, 2, 28, '#3A2420');
+    });
+    m.lights.push({ x: x + w * TS / 2, y: ty * TS + 30, r: 30, col: '#FFF1A8', a: 0.45, fl: 1 }, { x: x + w * TS / 2, y: ty * TS - 22, r: 14, col: '#FFD23F', a: 0.5, fl: 1 });
+    for (let i = 0; i < 6; i++) m.lights.push({ x: x + w * TS / 2 + Math.cos(i) * 5, y: ty * TS + 30 + Math.sin(i) * 5, r: 12, col: RAINBOW[i], a: 0.45, fl: 2 });
+    for (let yy = ty; yy < ty + 4; yy++) for (let xx = tx; xx < tx + w; xx++) setSolid(m, xx, yy);
+  }
+  // willows in the corners
+  [[5, 5], [30, 5], [5, 21], [30, 21], [24, 17]].forEach(([tx, ty]) => isWillow(c, f, m, tx, ty, r));
+  // rows of gravestones; some of them have funny words on them
+  m.graves = []; m.reads = [];
+  let gi = 0;
+  for (let ty = 4; ty <= 22; ty += 3) for (let tx = 4; tx <= 32; tx += 3) {
+    const t2 = tx + ((ty / 3) % 2 ? 1 : 0);
+    if (path.has(t2 + ',' + ty) || path.has(t2 + ',' + (ty + 1)) || solidAt(m, t2, ty) || solidAt(m, t2, ty + 1) || (t2 >= 14 && t2 <= 21 && ty <= 7) || (t2 <= 3 && ty >= 11 && ty <= 14) || r() < 0.12) continue;
+    isGrave(c, f, m, t2, ty, gi % 4, r, gi);
+    m.graves.push({ x: t2 * TS + 8, y: (ty + 1) * TS + 6 });
+    if (gi % 4 === 1 && m.reads.length < EPITAPHS.length) m.reads.push({ x: t2 * TS + 8, y: ty * TS + 18, text: EPITAPHS[m.reads.length] });
+    gi++;
+  }
+  // smiling pumpkins and glowing blue flowers
+  for (let i = 0; i < 14; i++) { const tx = 3 + ((r() * (W - 6)) | 0), ty = 3 + ((r() * (H - 6)) | 0); if (solidAt(m, tx, ty) || path.has(tx + ',' + ty)) continue; const x = tx * TS + 8, y = ty * TS + 10; pell(c, x, y, 5.5, 4, OUT); pell(c, x, y, 4.5, 3, '#FF9F1C'); px(c, x - 1, y - 5, 2, 2, '#3E9A4A'); px(c, x - 3, y - 1, 2, 1, '#FFE45C'); px(c, x + 1, y - 1, 2, 1, '#FFE45C'); px(c, x - 2, y + 1, 4, 1, '#FFE45C'); m.lights.push({ x, y, r: 12, col: '#FF9F1C', a: 0.55, fl: 2 }); }
+  for (let i = 0; i < 40; i++) { const x = (2 + r() * (W - 4)) * TS, y = (2 + r() * (H - 4)) * TS; if (solidAt(m, Math.floor(x / TS), Math.floor(y / TS))) continue; px(c, x | 0, y | 0, 2, 2, '#7FE8FF'); px(c, (x | 0), (y | 0) + 2, 1, 2, '#3E7A70'); m.flowers.push([x | 0, y | 0, '#7FE8FF']); }
+  m.entries = { isle: { x: 2.5 * TS, y: 13 * TS, face: 'side' } };
+  m.exits = [{ test: h => h.x < 1.3 * TS, to: 'isle', entry: 'grave' }];
+  m.isItems = [{ id: 'ing_shroom', kind: 'moonshroom', tx: 23, ty: 4 }];
+  for (const it of m.isItems) { const t = nearestFreeTile(m, it.tx, it.ty); if (t) { it.tx = t[0]; it.ty = t[1]; } it.x = it.tx * TS + 8; it.y = it.ty * TS + 12; }
+  m.fog = Array.from({ length: 12 }, () => ({ x: r() * W * TS, y: (3 + r() * (H - 6)) * TS, s: 20 + r() * 26, v: 4 + r() * 6 }));
+  return m;
+}
+
+// ---------------------------------------------------------------- the Great Hall of the Starlight Castle
+function buildHall() {
+  isleSprites();
+  const W = 30, H = 22, m = isMap(W, H, { landId: 'hall', name: 'The Great Hall', dusk: '#C8BCF0', music: 'hall', isle: true, hall: true });
+  m.ff = false;
+  const c = m.bg.getContext('2d'), f = m.fg.getContext('2d'), r = rng(2121);
+  // a checkered stone floor and a long purple carpet
+  for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+    const x = tx * TS, y = ty * TS, a = (tx + ty) % 2 ? '#5E5688' : '#4E467A';
+    px(c, x, y, TS, TS, a); px(c, x, y, TS, 1, '#3A3358'); px(c, x, y, 1, TS, '#3A3358'); px(c, x + 1, y + 1, TS - 2, 1, mixHex(a, '#FFFFFF', 0.15));
+    if (r() < 0.2) px(c, x + 3 + ((r() * 9) | 0), y + 4 + ((r() * 9) | 0), 2, 1, '#3A3358');
+  }
+  for (let ty = 4; ty < H; ty++) { const y = ty * TS; px(c, 13 * TS + 4, y, 2 * TS + 8, TS, '#6E2A8A'); px(c, 13 * TS + 4, y, 2, TS, '#FFD23F'); px(c, 15 * TS + 10, y, 2, TS, '#FFD23F'); if (ty % 2 === 0) { px(c, 15 * TS - 2, y + 6, 4, 4, '#FFD23F'); } }
+  // the north wall: tall windows full of stars, banners in between
+  px(c, 0, 0, W * TS, 3 * TS + 8, '#3A3358');
+  for (let yy = 4; yy < 3 * TS + 8; yy += 6) for (let xx = ((yy / 6) % 2) * 6; xx < W * TS; xx += 12) { px(c, xx, yy, 11, 5, '#4A4276'); px(c, xx, yy, 11, 1, '#5E5688'); }
+  for (let k = 0; k < 5; k++) {
+    const wx = 2 * TS + k * 6 * TS + 8, wy = 4, ww = 22, wh = 40;
+    pell(c, wx + ww / 2, wy + 10, ww / 2 + 2, 11, OUT); px(c, wx - 2, wy + 10, ww + 4, wh - 8, OUT);
+    pell(c, wx + ww / 2, wy + 10, ww / 2, 10, '#1A2A6A'); px(c, wx, wy + 10, ww, wh - 10, '#1A2A6A');
+    for (let i = 0; i < 10; i++) px(c, wx + 2 + ((r() * (ww - 4)) | 0), wy + 4 + ((r() * (wh - 8)) | 0), 1, 1, '#FFFFFF');
+    if (k === 2) { pell(c, wx + ww / 2, wy + 16, 6, 6, '#FFF1A8'); pell(c, wx + ww / 2 + 3, wy + 14, 5, 5, '#1A2A6A'); }
+    px(c, wx + ww / 2 - 1, wy, 2, wh, OUT); px(c, wx, wy + 22, ww, 2, OUT);
+    m.lights.push({ x: wx + ww / 2, y: wy + 24, r: 30, col: '#9FB8FF', a: 0.45, fl: 0 });
+    if (k < 4) { const bx = wx + ww + 14; px(c, bx - 1, 6, 16, 40, OUT); px(c, bx, 7, 14, 34, RAINBOW[(k + 1) % 6]); px(c, bx, 41, 4, 4, RAINBOW[(k + 1) % 6]); px(c, bx + 10, 41, 4, 4, RAINBOW[(k + 1) % 6]); px(c, bx + 5, 18, 4, 4, '#FFF1A8'); px(c, bx - 2, 5, 18, 2, '#FFD23F'); }
+  }
+  // side walls with torches
+  for (let ty = 0; ty < H; ty++) for (const tx of [0, W - 1]) { px(c, tx * TS, ty * TS, TS, TS, '#3A3358'); px(c, tx * TS + (tx ? 0 : TS - 3), ty * TS, 3, TS, '#2A2448'); setSolid(m, tx, ty); }
+  for (const ty of [6, 11, 16]) for (const tx of [0, W - 1]) { const x = tx * TS + (tx ? 2 : 10), y = ty * TS; px(c, x, y, 4, 8, '#2A2240'); px(c, x - 1, y - 5, 6, 5, '#FF9F1C'); px(c, x, y - 7, 4, 3, '#FFD23F'); m.lights.push({ x: x + 2, y: y - 4, r: 34, col: '#FF9F1C', a: 0.6, fl: 2 }); }
+  for (let ty = 0; ty < 3; ty++) for (let tx = 0; tx < W; tx++) setSolid(m, tx, ty);
+  // the head table on a raised stage
+  for (let tx = 6; tx <= 23; tx++) { const x = tx * TS; px(c, x, 3 * TS, TS, 2 * TS, '#6A5A8A'); px(c, x, 3 * TS, TS, 2, '#8A7AAA'); px(c, x, 5 * TS - 3, TS, 3, '#3A3358'); }
+  const table = (x0, y0, w, h, cloth) => {
+    pell(c, x0 + w / 2, y0 + h + 3, w / 2 + 4, 4, 'rgba(10,6,24,.5)');
+    px(c, x0 - 1, y0 - 1, w + 2, h + 2, OUT); px(c, x0, y0, w, h, '#8A5A3A'); px(c, x0 + 2, y0, w - 4, h, cloth); px(c, x0 + 2, y0, 2, h, mixHex(cloth, '#FFFFFF', 0.25));
+    const foods = [['#E8413A', '#FFD23F'], ['#FF9ACB', '#FFFFFF'], ['#FF9F1C', '#8A4A2E'], ['#7CFF6B', '#3E9A4A'], ['#C77DFF', '#FFFFFF']];
+    for (let yy = y0 + 4; yy < y0 + h - 6; yy += 10) { const [a, b] = pick(foods); pell(c, x0 + w / 2, yy + 3, 5, 3.5, '#E8E0F5'); pell(c, x0 + w / 2, yy + 2, 3.5, 2.5, a); px(c, x0 + w / 2 - 1, yy, 2, 1, b); px(c, x0 + 3, yy + 6, 2, 3, '#FFD23F'); px(c, x0 + w - 5, yy + 1, 2, 3, '#FFD23F'); }
+  };
+  table(7 * TS, 3 * TS + 4, 16 * TS, 18, '#5B2A9E');
+  for (let tx = 7; tx <= 22; tx++) setSolid(m, tx, 3);
+  for (const tx of [4, 9, 20, 25]) { table(tx * TS + 2, 8 * TS, 2 * TS - 4, 9 * TS, '#3D5BC9'); for (let ty = 8; ty <= 16; ty++) { setSolid(m, tx, ty); setSolid(m, tx + 1, ty); } }
+  // the doors to the south
+  px(c, 13 * TS, (H - 1) * TS - 6, 4 * TS, TS + 6, OUT); px(c, 13 * TS + 2, (H - 1) * TS - 4, 4 * TS - 4, TS + 4, '#5A3A2E');
+  for (let ty = H - 1; ty < H; ty++) for (let tx = 1; tx < W - 1; tx++) if (tx < 13 || tx > 16) setSolid(m, tx, ty);
+  m.candles = Array.from({ length: 46 }, () => ({ x: (1.5 + r() * (W - 3)) * TS, y: (4 + r() * 14) * TS, ph: r() * 6 }));
+  m.entries = { isle: { x: 15 * TS, y: 19 * TS, face: 'up' } };
+  m.exits = [{ test: h => h.y > 21.3 * TS, to: 'isle', entry: 'hall' }];
+  m.isItems = [];
+  return m;
+}
+if (typeof addTrack === 'function') {
+  addTrack('grave', { base: 'isle', bpm: 128, tr: -2, patch: { lead: 'flute', arp: 'bell' }, fx: { delay: 1.4, verb: 1.6 } });
+  addTrack('hall', { base: 'isle', bpm: 140, tr: 0, patch: { lead: 'organ', arp: 'harpsi' }, fx: { verb: 1.7 } });
+}
+if (typeof AMBIENT !== 'undefined') {
+  AMBIENT.isle = { n: 26, cols: ['#FFF1A8', '#C9BFFF', '#FF9ACB'], vy: [-7, -2], vx: [-3, 3], kind: 'spore' };
+  AMBIENT.grave = { n: 30, cols: ['#9FE0C8', '#7FE8FF', '#C9BFFF'], vy: [-6, -2], vx: [-4, 4], kind: 'spore' };
+  AMBIENT.hall = { n: 18, cols: ['#FFD23F', '#FFF1A8'], vy: [-8, -3], vx: [-2, 2], kind: 'spore' };
+}
+
+// ---------------------------------------------------------------- who lives here, and what they need
+const lettersNeeded = () => isleEasy() ? 4 : 5;
+const lettersFound = () => Array.from({ length: lettersNeeded() }, (_, i) => flags['pip_' + i]).filter(Boolean).length;
+const ING = [['ing_star', 'Star Flower'], ['ing_pearl', 'Glow Pearl'], ['ing_shroom', 'Moon Mushroom']];
+const ingFound = () => ING.filter(([k]) => flags[k]).length;
+const isMark = (done, ready, asked) => done ? null : ready ? ['!', '#7CFF6B'] : asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'];
+function isleNpcs(m) {
+  const T = TS;
+  if (m.landId === 'isle') return [
+    sqNpc({ spr: 'pip', x: 20.5 * T, y: 24 * T + 12, reach: 16, mark: () => isMark(flags.pip_done, lettersFound() >= lettersNeeded(), flags.pip_asked), talk: pipTalk }),
+    sqNpc({ spr: 'purr', x: 39.4 * T, y: 24 * T + 12, reach: 16, mark: () => isMark(flags.potion_done, ingFound() >= 3, flags.potion_asked), talk: purrTalk }),
+    sqNpc({ spr: 'baker', x: 20.5 * T, y: 32 * T + 10, reach: 15, talk(n) { hero.hp = hero.maxHp; drawHearts(); poof(hero.x, hero.y - 10, '#FFD23F'); toast(pick(['Bun the Baker: Have a warm moon bun! Your hearts are all full again.', 'Bun the Baker: Fresh from the oven! Star cookies make you strong.', 'Bun the Baker: Mrs. Pip loves my blueberry buns. Shh, don\'t tell!'])); } }),
+    sqNpc({ spr: 'bear', x: 25.6 * T, y: 13 * T + 8, reach: 16, mark: () => flags.isle_gate ? null : isleDone() >= 3 ? ['!', '#7CFF6B'] : null, talk: bearTalk }),
+    sqNpc({ spr: 'bunA', x: 26 * T, y: 24 * T, wander: 28, lines: ['Welcome to Moonspire Village! The trains bring visitors once a hundred years. Lucky us!', 'I am learning to make bubbles come out of my wand. Pop!'] }),
+    sqNpc({ spr: 'bunB', x: 34 * T, y: 29 * T, wander: 26, lines: ['The castle is SO big. I got lost in it three times!', 'Have you seen the graveyard? The ghosts there are very sleepy and very nice.'] }),
+    sqNpc({ spr: 'bunC', x: 13 * T, y: 32 * T, wander: 20, lines: ['These are the smiliest pumpkins in the whole world.', 'The windmill makes flour for Bun the Baker.'] }),
+    sqNpc({ spr: 'hog', x: 47 * T, y: 15 * T, wander: 22, lines: ['The star tower has a giant telescope. You can see Rainbow Town from up there!', 'The greenhouse plants glow at night. That is how they say hello.'] }),
+  ];
+  if (m.landId === 'grave') return [
+    sqNpc({ spr: 'mossy', x: 20 * T, y: 9 * T, reach: 16, mark: () => isWisp ? null : flags.wisp_done ? null : flags.wisp_asked ? ['?', '#FFD23F'] : ['!', '#FFD23F'], talk: mossyTalk }),
+  ];
+  if (m.landId === 'hall') return [
+    sqNpc({ spr: 'hoot', x: 15 * T, y: 6 * T + 4, reach: 18, mark: () => flags.hall_done ? null : ['!', '#7CFF6B'], talk: hootTalk }),
+    sqNpc({ spr: 'bunA', x: 12 * T, y: 12 * T, wander: 26, lines: ['Look up! The candles float all by themselves.', 'Headmistress Hootley knows every spell in every book.'] }),
+    sqNpc({ spr: 'bunB', x: 18 * T, y: 15 * T, wander: 26, lines: ['Dinner here is the best. Moon pie for dessert!', 'One day the towers will open and we can explore them all!'] }),
+    sqNpc({ spr: 'hog', x: 23 * T, y: 18 * T, wander: 18, lines: ['I am studying to be a star-watcher.', 'Ooh, a visitor from Rainbow Town!'] }),
+  ];
+  return [];
+}
+function pipTalk() {
+  if (flags.pip_done) { toast(pick(['Mrs. Pip: Hoo-ray! Every letter is home. Thank you, dear!', 'Mrs. Pip: Owl Post is open! Want to send a letter to your mom?'])); return; }
+  const n = lettersNeeded(), k = lettersFound();
+  if (k >= n) { setFlag('pip_done'); sqCoins(40); sqFurn('owlperch'); sqPrize('Letter Hero!', 'You found all of Mrs. Pip\'s lost letters. Now everyone on Moonspire Isle gets their mail!', [{ coins: 40 }, furnReward('owlperch')]); return; }
+  if (!flags.pip_asked) { setFlag('pip_asked'); toast(`Mrs. Pip: Hoo! The sea wind blew ${n} of my letters all over the island! Look by the lake, the windmill, the star tower and the castle garden.`); return; }
+  toast(`Mrs. Pip: You found ${k} of ${n} letters. Hoo, keep looking!`);
+}
+function purrTalk() {
+  if (flags.potion_done) { toast(pick(['Madame Purrkins: My moon potion made the whole village glow. Purrrfect!', 'Madame Purrkins: Mew! Mind the cauldron, it is still bubbly.'])); return; }
+  if (ingFound() >= 3) {
+    setFlag('potion_done'); sqCoins(40); sqFurn('cauldron'); gotRune('spark', true);
+    for (let i = 0; i < 24; i++) poofs.push({ x: hero.x + rand(-16, 16), y: hero.y - 20, vx: rand(-30, 30), vy: rand(-80, -30), life: 1.2, col: pick(RAINBOW) });
+    sqPrize('Potion Master!', 'Bubble, bubble, sparkle! Madame Purrkins mixed the <b class="rb">Moon Potion</b>. Your wand feels tingly!', [{ coins: 40 }, furnReward('cauldron'), runeReward('spark')]);
+    return;
+  }
+  if (!flags.potion_asked) { setFlag('potion_asked'); toast('Madame Purrkins: Mew! I need 3 things for my Moon Potion: a Star Flower from the castle garden, a Glow Pearl from the lake dock, and a Moon Mushroom from the graveyard.'); return; }
+  const miss = ING.filter(([k2]) => !flags[k2]).map(([, nm]) => nm);
+  toast(`Madame Purrkins: You have ${ingFound()} of 3. I still need: ${miss.join(', ')}.`);
+}
+function bearTalk() {
+  const m = cur;
+  if (flags.isle_gate) { toast('Barnaby: The gates are open! Go on in, Headmistress Hootley is waiting.'); return; }
+  if (isleDone() >= 3) {
+    setFlag('isle_gate'); for (const [tx, ty] of m.gate.tiles) setSolid(m, tx, ty, 0);
+    m.gateAnim = 0.01; sfx.door(); shake = 0.3; [392, 523, 659, 784].forEach((fq, i) => tone(fq, 0.4, 'triangle', 0.08, null, i * 0.15));
+    toast('Barnaby: You helped everybody on Moonspire Isle! By order of the Headmistress... open the gates!'); return;
+  }
+  toast(`Barnaby: Halt! Only true island helpers may enter the castle. Help Mrs. Pip, Madame Purrkins and Old Mossy in the graveyard. (${isleDone()} of 3 done)`);
+}
+function hootTalk() {
+  if (flags.hall_done) { toast(pick(['Headmistress Hootley: The towers of this castle hold many secrets. They will open for you soon, little hero.', 'Headmistress Hootley: Hoo! Remember: kindness is the strongest magic of all.'])); return; }
+  setFlag('hall_done'); sqCoins(100); sqFurn('moonbanner'); gotRune('lucky', true);
+  if (typeof confetti === 'function') setTimeout(confetti, 500);
+  sqPrize('Starlight Hero!', 'Headmistress Hootley says: "Welcome to the Starlight Castle! You helped the whole island. The castle towers hold many more adventures... they open in the next chapter!"', [{ coins: 100 }, furnReward('moonbanner'), runeReward('lucky')]);
+}
+function mossyTalk() {
+  if (isWisp) return;
+  const easy = isleEasy();
+  setFlag('wisp_asked');
+  toast(flags.wisp_done ? 'Old Mossy: Yawn... the wisps are out again! Catch them once more?'
+    : easy ? 'Old Mossy: Yaaawn! My little wisps are out of bed. Catch 10 of them before my lantern goes out. Walk into them!'
+      : 'Old Mossy: Yaaawn! My wisps are out of bed! Catch 15, but only the color my lantern shows. Wrong color, one hops back to bed!');
+  const m = cur;
+  setTimeout(() => { if (state === 'play' && cur === m && !isWisp) startWisps(); }, 2600);
+}
+
+// ---------------------------------------------------------------- the Wisp Round-Up mini game
+let isWisp = null;
+function isUI() {
+  if ($('wispHud')) return;
+  const st = document.createElement('style');
+  st.textContent = `
+  .wisphud { --edge: #7FE8FF; pointer-events: none; gap: 12px; padding: 8px 14px; align-items: center; }
+  .wisphud img { width: 28px; image-rendering: pixelated; }
+  .wisphud .wt { width: clamp(80px, 16vmin, 150px); height: 10px; background: #3B2C6E; box-shadow: 0 0 0 2px #0E0920; }
+  .wisphud .wt i { display: block; height: 100%; background: linear-gradient(90deg, #7FE8FF, #C9BFFF); transform-origin: left; }
+  .wisphud b { font: 700 22px/1 var(--pixel); color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 0 8px #7FE8FF; }
+  .wisphud .tg { display: flex; align-items: center; gap: 6px; font: 700 16px/1 var(--pixel); color: var(--gold); }
+  .wisphud .tg img { width: 34px; animation: bob .5s steps(2) infinite; }`;
+  document.head.appendChild(st);
+  const d = document.createElement('div');
+  d.innerHTML = `<div class="hud tc frame wisphud" id="wispHud" hidden aria-label="Wisps caught"><span class="tg" id="wispTg"></span><img alt="" id="wispImg"><b id="wispN">0</b><span class="wt"><i id="wispT"></i></span></div>`;
+  $('toast').parentNode.insertBefore(d.firstChild, $('toast'));
+}
+function startWisps() {
+  isUI(); isleSprites();
+  const easy = isleEasy();
+  isWisp = { t: 0, len: easy ? 55 : 45, need: easy ? 10 : 15, got: 0, list: [], spawnT: 0.3, target: 'blue', tT: 0, easy };
+  $('wispHud').hidden = false; $('wispImg').src = ISP.wispURL.blue;
+  $('wispTg').innerHTML = easy ? '' : `Catch <img alt="" src="${ISP.wispURL.blue}">`;
+  [523, 659, 784, 1047].forEach((fq, i) => tone(fq, 0.15, 'triangle', 0.07, null, i * 0.1));
+  wispHud();
+}
+function wispHud() { const W = isWisp; if (!W) return; $('wispN').textContent = `${W.got}/${W.need}`; $('wispT').style.transform = `scaleX(${Math.max(0, 1 - W.t / W.len)})`; }
+function stopWisps() { isWisp = null; if ($('wispHud')) $('wispHud').hidden = true; }
+function updateWisps(dt) {
+  const W = isWisp, m = cur; if (!W) return;
+  if (!m.grave) { stopWisps(); return; }
+  if (state !== 'play') return;
+  W.t += dt;
+  if (!W.easy) { W.tT += dt; if (W.tT > 9) { W.tT = 0; const opts = Object.keys(ISP.wispCols).filter(k => k !== W.target); W.target = pick(opts); $('wispTg').innerHTML = `Catch <img alt="" src="${ISP.wispURL[W.target]}">`; tone(880, 0.2, 'sine', 0.07); tone(1320, 0.3, 'sine', 0.06, null, 0.1); toast(`Old Mossy: Now catch the ${W.target} ones!`); } }
+  W.spawnT -= dt;
+  if (W.spawnT <= 0 && W.list.length < (W.easy ? 6 : 8) && m.graves.length) {
+    W.spawnT = W.easy ? 0.9 : 0.7;
+    const g = pick(m.graves), cols = Object.keys(ISP.wispCols);
+    const col = !W.easy && Math.random() < 0.45 ? W.target : pick(cols);
+    W.list.push({ x: g.x, y: g.y + 4, vx: rand(-20, 20), vy: rand(-20, 20), col, age: 0, life: W.easy ? 9 : 6.5, ph: rand(0, 6) });
+    tone(rand(500, 700), 0.08, 'sine', 0.03, 900);
+  }
+  const flee = W.easy ? 22 : 55, top = W.easy ? 26 : 44;
+  for (const w of W.list) {
+    w.age += dt; w.ph += dt;
+    w.vx += Math.sin(w.ph * 1.7) * 30 * dt; w.vy += Math.cos(w.ph * 1.3) * 30 * dt;
+    const dx = w.x - hero.x, dy = w.y - hero.y, d = Math.hypot(dx, dy) || 1;
+    if (d < 46) { w.vx += dx / d * flee * dt * 3; w.vy += dy / d * flee * dt * 3; }
+    const sp = Math.hypot(w.vx, w.vy); if (sp > top) { w.vx *= top / sp; w.vy *= top / sp; }
+    const nx = w.x + w.vx * dt, ny = w.y + w.vy * dt;
+    if (nx < 2.5 * TS || nx > (m.w - 2.5) * TS) w.vx = -w.vx; else w.x = nx;
+    if (ny < 3 * TS || ny > (m.h - 2.5) * TS) w.vy = -w.vy; else w.y = ny;
+    if (w.age > 0.4 && d < 13) {
+      w.gone = true;
+      if (W.easy || w.col === W.target) { W.got++; poof(w.x, w.y - 10, ISP.wispCols[w.col]); tone(600 + W.got * 40, 0.12, 'triangle', 0.08); tone(900 + W.got * 40, 0.12, 'triangle', 0.06, null, 0.06); }
+      else { W.got = Math.max(0, W.got - 1); sfx.bad(); hint('wispwrong', `Oops, that one was ${w.col}! It hopped back to bed.`); }
+    }
+    if (w.age > w.life) { w.gone = true; poof(w.x, w.y - 8, '#C9BFFF'); }
+  }
+  W.list = W.list.filter(w => !w.gone);
+  wispHud();
+  if (W.got >= W.need) winWisps();
+  else if (W.t >= W.len) { const got = W.got; stopWisps(); sfx.bad(); toast(`Old Mossy: Yawn... my lantern went out. You caught ${got}! Talk to me to try again.`); }
+}
+function winWisps() {
+  const W = isWisp, first = !flags.wisp_done, firstTricky = !W.easy && !flags.wisp_tricky;
+  stopWisps(); setFlag('wisp_done'); if (!W.easy) setFlag('wisp_tricky');
+  const rw = [];
+  if (first) { sqCoins(40); sqFurn('wisplamp'); rw.push({ coins: 40 }, furnReward('wisplamp')); } else { sqCoins(10); rw.push({ coins: 10 }); }
+  if (firstTricky) { gotRune('ice', true); rw.push(runeReward('ice')); }
+  sqPrize('Wisp Wrangler!', 'All the little wisps are tucked back into bed. Old Mossy can finally have his nap. <b class="rb">Zzz...</b>', rw);
+}
+
+// ---------------------------------------------------------------- the station on the island: ride home, or ride again
+let isStationCool = false, isGateCool = false;
+function openIsleStation() {
+  $('toast').hidden = true; paused = true; hero.path = []; marker = null;
+  const el = $('celebrate');
+  el.innerHTML = `<div class="panel"><h2 class="glowtext">Moonspire Station</h2>
+    <p class="endnote">The <b class="rb">Rainbow Express</b> is ready to go! Where to?</p>
+    <div class="btns"><button class="big alt" id="isStay" aria-label="Stay on the island">${ICON_NEXT}</button><button class="big alt" id="isAgain" aria-label="Ride the train again">${ICON_AGAIN}</button><button class="big" id="isHome" aria-label="Ride home to Rainbow Town">${ICON_HOME}</button></div>
+    <p class="endnote" style="font-size:.8em;opacity:.8">Stay here &nbsp;·&nbsp; Ride the train levels again &nbsp;·&nbsp; Ride home to Rainbow Town</p></div>`;
+  el.hidden = false;
+  const close = () => { el.hidden = true; paused = false; last = performance.now(); };
+  $('isStay').addEventListener('click', () => { sfx.tap(); close(); state = 'play'; });
+  $('isAgain').addEventListener('click', () => { sfx.good(); close(); startTrain(0); });
+  $('isHome').addEventListener('click', () => { sfx.good(); close(); state = 'play'; stationCool = true; [587, 740, 880].forEach((fq, i) => tone(fq, 0.7, 'triangle', 0.05, null, i * 0.02)); travel('town', 'station'); });
+}
+// the train ride ends here now
+function goToIsle() { enterMap(buildLand('isle'), 'train'); }
+
+// ---------------------------------------------------------------- per frame
+function updateIsle(dt) {
+  const m = cur;
+  if (m.gateAnim) m.gateAnim = Math.min(1, m.gateAnim + dt * 0.7);
+  if (!m.isle) { if (isWisp) stopWisps(); return; }
+  updateWisps(dt);
+  if (state !== 'play') return;
+  // things to pick up
+  for (const it of m.isItems || []) if (!flags[it.id] && Math.hypot(hero.x - it.x, hero.y - it.y) < 12) {
+    if (it.kind === 'letter' && +it.id.slice(4) >= lettersNeeded()) continue;
+    setFlag(it.id); poof(it.x, it.y - 8, it.kind === 'letter' ? '#FFFFFF' : it.kind === 'pearl' ? '#FFC0D8' : it.kind === 'starflower' ? '#FFE45C' : '#7FB8FF');
+    [988, 1319, 1568, 1976].forEach((fq, i) => tone(fq, 0.12, 'triangle', 0.07, null, i * 0.07));
+    if (it.kind === 'letter') { const k = lettersFound(), n = lettersNeeded(); toast(k >= n ? `All ${n} letters! Take them to Mrs. Pip at the Owl Post!` : `A lost letter! ${k} of ${n}`); }
+    else { const nm = ING.find(([k]) => k === it.id)[1], k = ingFound(); toast(k >= 3 ? `A ${nm}! That is all 3. Hurry to Madame Purrkins!` : `A ${nm}! ${k} of 3 potion things`); }
+  }
+  // the island station
+  if (m.mat) {
+    const d = Math.hypot(hero.x - m.mat.x, hero.y - m.mat.y);
+    if (isStationCool && d > 26) isStationCool = false;
+    if (!isStationCool && d < 10) { isStationCool = true; openIsleStation(); return; }
+    if (!flags.isle_hi && Math.hypot(hero.x - 30 * TS, hero.y - 20 * TS) < 100) { setFlag('isle_hi'); }
+  }
+  // the castle gate
+  if (m.gate) {
+    const nearGate = Math.abs(hero.x - m.gate.x) < 20 && hero.y < 13 * TS + 2;
+    if (isGateCool && hero.y > 13.5 * TS) isGateCool = false;
+    if (flags.isle_gate && !isGateCool && Math.abs(hero.x - m.gate.x) < 16 && hero.y < 12 * TS + 6) { isGateCool = true; travel('hall', 'isle'); return; }
+    if (!flags.isle_gate && nearGate) hint('isgate', 'The castle gates are shut tight. Ask Barnaby the guard!');
+  }
+  // funny gravestones
+  for (const s of m.reads || []) if (Math.hypot(hero.x - s.x, hero.y - s.y) < 16) hint('read' + s.x, s.text);
+}
+function isleDrawables(list) {
+  const m = cur; if (!m.isle) return;
+  for (const it of m.isItems || []) {
+    if (flags[it.id] || it.kind === 'letter' && +it.id.slice(4) >= lettersNeeded()) continue;
+    list.push({ y: it.y, d: (cx, cy) => {
+      const img = ISP[it.kind], b = Math.round(Math.sin(clock * 3 + it.x) * 2);
+      ctx.globalAlpha = 0.45; ctx.drawImage(shadowSpr, Math.round(it.x - 6 - cx), Math.round(it.y - 2 - cy), 12, 4); ctx.globalAlpha = 1;
+      ctx.drawImage(img, Math.round(it.x - img.width / 2 - cx), Math.round(it.y - img.height - 3 + b - cy));
+    } });
+  }
+  if (m.gate && (!flags.isle_gate || m.gateAnim && m.gateAnim < 1)) list.push({ y: 12 * TS - 1, d: (cx, cy) => {
+    const open = flags.isle_gate ? m.gateAnim || 1 : 0, w = Math.round(16 * (1 - open)), X = Math.round(m.gate.x - cx), Y = Math.round(150 - cy);
+    for (const side of [-1, 1]) {
+      const x0 = side < 0 ? X - 16 : X + 16 - w; if (w <= 0) continue;
+      ctx.fillStyle = OUT; ctx.fillRect(x0, Y - 6, w, 48); ctx.fillStyle = '#7A4A2E'; ctx.fillRect(x0 + 1, Y - 5, w - 2, 46);
+      ctx.fillStyle = '#5A3420'; for (let k = 3; k < w - 1; k += 4) ctx.fillRect(x0 + k, Y - 5, 1, 46);
+      ctx.fillStyle = '#FFD23F'; ctx.fillRect(x0 + 1, Y + 6, w - 2, 2); ctx.fillRect(x0 + 1, Y + 26, w - 2, 2);
+      if (w > 6) { ctx.fillRect(side < 0 ? x0 + w - 4 : x0 + 2, Y + 15, 2, 4); }
+    }
+    if (!flags.isle_gate) { ctx.fillStyle = '#C9BFFF'; const k = Math.floor(clock * 4) % 2; ctx.fillRect(X - 2, Y + 14 + k, 4, 4); }
+  } });
+  if (m.mill) list.push({ y: m.mill.base, d: (cx, cy) => {
+    const X = Math.round(m.mill.x - cx), Y = Math.round(m.mill.y - cy), a0 = clock * 0.8;
+    for (let k = 0; k < 4; k++) {
+      const a = a0 + k * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a);
+      for (let i = 4; i < 38; i++) { const x = X + ca * i, y = Y + sa * i; ctx.fillStyle = OUT; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); }
+      for (let i = 4; i < 38; i++) { const x = X + ca * i, y = Y + sa * i; ctx.fillStyle = '#8A5A3A'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); if (i > 8) { const px2 = x - sa * 5, py2 = y + ca * 5; ctx.fillStyle = i % 4 ? '#F0E6D8' : '#C8B8A0'; ctx.fillRect(Math.round((x + px2) / 2), Math.round((y + py2) / 2), 2, 2); ctx.fillRect(Math.round(px2), Math.round(py2), 1, 1); } }
+    }
+    ctx.fillStyle = OUT; ctx.fillRect(X - 3, Y - 3, 6, 6); ctx.fillStyle = '#FFD23F'; ctx.fillRect(X - 2, Y - 2, 4, 4);
+  } });
+  if (isWisp) for (const w of isWisp.list) list.push({ y: w.y, d: (cx, cy) => {
+    const img = ISP.wisp[w.col][Math.floor(clock * 6 + w.ph) % 2], rise = Math.min(1, w.age / 0.4), fade = w.life - w.age < 0.6 ? (w.life - w.age) / 0.6 : 1;
+    ctx.globalAlpha = 0.35 * fade; ctx.drawImage(shadowSpr, Math.round(w.x - 5 - cx), Math.round(w.y - 2 - cy), 10, 4);
+    ctx.globalAlpha = fade; ctx.drawImage(img, Math.round(w.x - 6 - cx), Math.round(w.y - 14 - rise * 8 + Math.sin(w.ph * 4) * 2 - cy));
+    ctx.globalAlpha = 1;
+  } });
+}
+function isleLights(cx, cy) {
+  const m = cur; if (!m.isle) return;
+  for (const it of m.isItems || []) if (!flags[it.id] && !(it.kind === 'letter' && +it.id.slice(4) >= lettersNeeded())) { const col = it.kind === 'letter' ? '#FFFFFF' : it.kind === 'pearl' ? '#FFC0D8' : it.kind === 'starflower' ? '#FFE45C' : '#7FB8FF'; ctx.globalAlpha = 0.55 + 0.25 * Math.sin(clock * 4 + it.x); ctx.drawImage(glow(col, 18), Math.round(it.x - 18 - cx), Math.round(it.y - 10 - 18 - cy)); }
+  if (m.floaters) for (const L of m.floaters) {
+    const x = Math.round(L.x + Math.sin(clock * 0.5 + L.ph) * 6 - cx), y = Math.round(L.y - 40 + Math.sin(clock * 0.9 + L.ph) * 4 - cy);
+    if (x < -20 || y < -20 || x > VW + 20 || y > VH + 20) continue;
+    ctx.globalAlpha = 0.6; ctx.drawImage(glow(L.col, 12), x - 12, y - 12);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.fillStyle = OUT; ctx.fillRect(x - 3, y - 4, 6, 8); ctx.fillStyle = L.col; ctx.fillRect(x - 2, y - 3, 4, 6); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(x - 1, y - 2, 1, 2); ctx.globalCompositeOperation = 'lighter';
+  }
+  if (m.fountain) { ctx.globalAlpha = 1; ctx.fillStyle = '#BDF4FF'; for (let i = 0; i < 10; i++) { const t = (clock * 1.1 + i / 10) % 1, a = i / 10 * Math.PI * 2; ctx.fillRect(Math.round(m.fountain.x + Math.cos(a) * t * 18 - cx), Math.round(m.fountain.y + t * 24 - Math.sin(t * Math.PI) * 12 - cy), 1, 2); } }
+  if (m.candles) for (const L of m.candles) {
+    const x = Math.round(L.x - cx), y = Math.round(L.y - 34 + Math.sin(clock * 1.2 + L.ph) * 3 - cy);
+    if (x < -10 || y < -10 || x > VW + 10 || y > VH + 10) continue;
+    ctx.globalAlpha = 0.55; ctx.drawImage(glow('#FFC870', 10), x - 10, y - 12);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.fillStyle = '#F5F0E0'; ctx.fillRect(x, y - 2, 2, 6); ctx.fillStyle = '#FFD23F'; ctx.fillRect(x, y - 4 - (Math.floor(clock * 8 + L.ph) % 2), 2, 2); ctx.globalCompositeOperation = 'lighter';
+  }
+  if (m.fog && !REDUCED) for (const fg of m.fog) { fg.x += fg.v * 0.016; if (fg.x > m.w * TS + 40) fg.x = -40; ctx.globalAlpha = 0.16; ctx.drawImage(glow('#C9BFFF', fg.s), Math.round(fg.x - fg.s - cx), Math.round(fg.y - fg.s * 0.6 - cy), fg.s * 2, fg.s * 1.2); }
+  if (isWisp) for (const w of isWisp.list) { const rise = Math.min(1, w.age / 0.4); ctx.globalAlpha = 0.7; ctx.drawImage(glow(ISP.wispCols[w.col], 16), Math.round(w.x - 16 - cx), Math.round(w.y - 8 - rise * 8 - 16 - cy)); }
+  if (m.gate && !flags.isle_gate) { ctx.globalAlpha = 0.25 + 0.1 * Math.sin(clock * 3); ctx.drawImage(glow('#C9BFFF', 26), Math.round(m.gate.x - 26 - cx), Math.round(170 - 26 - cy)); }
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------- trophies for the island
+if (typeof TROPHIES !== 'undefined') {
+  TROPHIES.splice(TROPHIES.length - 2, 0,
+    { id: 'isle', name: 'Island Explorer', desc: 'Visit Moonspire Isle', tier: 'bronze', icon: 'castle', test: () => !!flags.visit_isle },
+    { id: 'wisps', name: 'Wisp Wrangler', desc: 'Catch Old Mossy\'s wisps', tier: 'silver', icon: 'star', test: () => !!flags.wisp_done },
+    { id: 'isleQ', name: 'Island Helper', desc: 'Help Mrs. Pip, Madame Purrkins and Old Mossy', tier: 'gold', icon: 'crown', test: () => isleDone() >= 3 },
+    { id: 'hall', name: 'Starlight Hero', desc: 'Visit the Great Hall of the castle', tier: 'gold', icon: 'castle', test: () => !!flags.hall_done },
+  );
+}
+if (typeof PLACES !== 'undefined') PLACES.push('isle', 'grave');
+
+// ---------------------------------------------------------------- hooking into the game
+const ISLE_MAPS = { isle: buildIsle, grave: buildGrave, hall: buildHall };
+{
+  const _bl = buildLand;
+  buildLand = function (id, ...a) { if (ISLE_MAPS[id]) return ISLE_MAPS[id](); return _bl(id, ...a); };
+  const _em = enterMap;
+  enterMap = function (m, entry, ...a) {
+    const r = _em(m, entry, ...a);
+    if (isWisp && !m.grave) stopWisps();
+    if (m.isle) {
+      sqNpcs = isleNpcs(m);
+      if (entry === 'train') isStationCool = true;
+      if (entry === 'hall') isGateCool = true;
+      if (m.landId === 'isle' && !flags.visit_isle) { setFlag('visit_isle'); setTimeout(() => { toast('Welcome to Moonspire Isle! Explore the village and say hi to everybody.'); sfx.win(); }, 1200); }
+      if (m.landId === 'grave' && !flags.visit_grave) { setFlag('visit_grave'); setTimeout(() => toast('Shh... the Moonlit Graveyard. Everyone here is very sleepy, and very friendly.'), 1200); }
+    }
+    return r;
+  };
+  const _uq = updateQuest;
+  updateQuest = function (dt) { _uq(dt); updateIsle(dt); };
+  const _ad = adventureDrawables;
+  adventureDrawables = function (list) { _ad(list); isleDrawables(list); };
+  const _al = adventureLights;
+  adventureLights = function (cx, cy) { _al(cx, cy); isleLights(cx, cy); };
+  const _sp = showPick;
+  showPick = function (...a) { stopWisps(); return _sp(...a); };
+}
+window.__isle = { buildIsle, buildGrave, buildHall, startWisps, get wisp() { return isWisp; }, goToIsle, openIsleStation, isleDone };
 
 buildSprites();
 buildSPR3();
