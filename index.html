@@ -198,16 +198,16 @@
   .seg button { border: 0; cursor: pointer; min-width: 96px; min-height: 60px; padding: 0 16px; font: 700 clamp(19px, 3.4vmin, 26px)/1 var(--pixel); color: var(--muted); background: #2A1F4A; box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--line); }
   .seg button[aria-pressed="true"] { color: var(--night); background: var(--gold); box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--gold), 0 0 16px var(--gold); }
   .slots { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; width: 100%; }
-  .slot { --sc: var(--line); position: relative; flex: 1 1 190px; max-width: 230px; min-height: 120px; border: 0; cursor: pointer; padding: 14px 12px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  .slots .slot { --sc: var(--line); position: relative; flex: 1 1 190px; max-width: 230px; min-height: 120px; border: 0; cursor: pointer; padding: 14px 12px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
     background: #2A1F4A; box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--sc); color: var(--text); }
-  .slot.cur { --sc: var(--lime); box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--sc), 0 0 22px var(--sc); }
-  .slot .sname { font: 700 clamp(22px, 4vmin, 30px)/1.05 var(--pixel); word-break: break-word; }
-  .slot .sstat { display: flex; gap: 14px; font: 700 20px/1 var(--pixel); color: var(--gold); align-items: center; }
-  .slot .sstat .coin { width: 16px; height: 16px; }
-  .slot .stag { font: 700 14px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--lime); }
-  .slot .stag.new { color: var(--muted); }
-  .slot .sedit { position: absolute; top: 4px; right: 4px; width: 40px; height: 40px; box-shadow: none; background: transparent; color: var(--muted); }
-  .slot .sedit svg { width: 22px; height: 22px; }
+  .slots .slot.cur { --sc: var(--lime); box-shadow: 0 0 0 3px var(--night), 0 0 0 6px var(--sc), 0 0 22px var(--sc); }
+  .slots .slot .sname { font: 700 clamp(22px, 4vmin, 30px)/1.05 var(--pixel); word-break: break-word; }
+  .slots .slot .sstat { display: flex; gap: 14px; font: 700 20px/1 var(--pixel); color: var(--gold); align-items: center; }
+  .slots .slot .sstat .coin { width: 16px; height: 16px; }
+  .slots .slot .stag { font: 700 14px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--lime); }
+  .slots .slot .stag.new { color: var(--muted); }
+  .slots .slot .sedit { position: absolute; top: 4px; right: 4px; width: 40px; height: 40px; box-shadow: none; background: transparent; color: var(--muted); }
+  .slots .slot .sedit svg { width: 22px; height: 22px; }
   .holdbtn { position: relative; overflow: hidden; --mc: #FF5A5F; }
   .holdbtn .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255, 90, 95, .45); pointer-events: none; }
   .holdbtn span { position: relative; }
@@ -12214,6 +12214,298 @@ const ISLE_MAPS = { isle: buildIsle, grave: buildGrave, hall: buildHall };
   showPick = function (...a) { stopWisps(); return _sp(...a); };
 }
 window.__isle = { buildIsle, buildGrave, buildHall, startWisps, get wisp() { return isWisp; }, goToIsle, openIsleStation, isleDone };
+
+
+// ================================================================ v23: smaller phone HUD, the Bag (weapons and powers), and a zoomable map of the land you are in
+// - The house ghost roster only shows inside your house.
+// - Weapon swap and power swap buttons are gone from the screen. Tap the Bag to pick a weapon or a power.
+// - Ollie's Map opens on "This land": a detailed map you can pinch, drag and zoom. "World" is the old overview.
+//   Secret places stay off the map until you find them.
+{
+  const css = document.createElement('style');
+  css.textContent = `
+  #swapBtn, #powSwap { display: none !important; }
+  #bagBtn { position: fixed; z-index: 5; right: calc(var(--gutter-r) + 16px); bottom: calc(118px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px; color: #FFB86B; --line: #FFB86B; zoom: .78; }
+  #bagBtn svg { width: 32px; height: 32px; filter: drop-shadow(0 0 5px #FFB86B); }
+  #bagBtn.ping { animation: bob .5s steps(2) infinite; box-shadow: 0 0 0 3px var(--night), 0 0 0 6px #FFB86B, 0 0 18px #FFB86B; }
+  #bag { position: fixed; z-index: 12; inset: 0; background: rgba(14, 9, 32, .55); }
+  #bag .bagbox { --edge: #FFB86B; position: absolute; right: calc(var(--gutter-r) + 10px); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px)); max-height: calc(100% - 28px);
+    overflow: auto; box-sizing: border-box; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; transform-origin: 100% 100%; animation: bagOpen .22s steps(5) both; }
+  @keyframes bagOpen { from { transform: scale(.15); opacity: 0; } to { transform: none; opacity: 1; } }
+  #bag .baghead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  #bag h2 { margin: 0; font-size: 26px; }
+  #bag h3 { margin: 4px 0 0; font: 700 15px/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  #bag .bagrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+  #bag .bagit { --ic: var(--cyan); border: 0; cursor: pointer; min-height: 84px; padding: 8px 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    background: #2A1F4A; color: var(--text); box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--line); font: 700 13px/1.1 var(--pixel); text-align: center; }
+  #bag .bagit svg { width: 34px; height: 34px; color: var(--ic); filter: drop-shadow(0 0 5px var(--ic)); }
+  #bag .bagit[aria-pressed="true"] { background: #3A2A66; box-shadow: 0 0 0 3px var(--night), 0 0 0 5px var(--ic), 0 0 16px var(--ic); }
+  #bag .bagit[aria-pressed="true"]::before { content: "Using"; font-size: 11px; color: var(--ic); letter-spacing: .08em; text-transform: uppercase; }
+  #bag .runes { display: flex; flex-wrap: wrap; gap: 8px 14px; font: 700 16px/1 var(--pixel); }
+  #bag .runes span { display: inline-flex; align-items: center; gap: 6px; }
+  #bag .runes i { width: 14px; height: 18px; background: var(--rc); clip-path: polygon(50% 0, 100% 35%, 50% 100%, 0 35%); filter: drop-shadow(0 0 4px var(--rc)); }
+  #bag .bagnote { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.3; }
+
+  /* the map of this land */
+  .hmtabs { display: flex; gap: 8px; }
+  #hmMap .shophead { flex-wrap: nowrap; }
+  #hmMap .shophead > div:first-child { flex: 1 1 auto; flex-basis: auto; min-width: 0; }
+  #hmMap .shophead p { margin: 2px 0 0; }
+  #hmMapClose, #bagClose { width: 44px; height: 44px; flex: none; }
+  #hmMapClose svg, #bagClose svg { width: 24px; height: 24px; }
+  #lmView { position: relative; width: 100%; height: min(calc(100vh - 200px), 62vw); min-height: 220px; overflow: hidden; background: #0E0920; touch-action: none; cursor: grab;
+    box-shadow: inset 0 0 0 3px #2A2050; }
+  #lmView canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #lmView .lmz { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 10px; }
+  #lmView .lmz .sq { width: 44px; height: 44px; }
+  #lmView .lmz .sq svg { width: 24px; height: 24px; }
+  #lmView .lmtip { position: absolute; left: 8px; bottom: 8px; font: 700 13px/1.2 var(--pixel); color: var(--muted); background: rgba(14, 9, 32, .7); padding: 4px 6px; pointer-events: none; }
+  #hmMap[data-tab="land"] #hmMapCv, #hmMap[data-tab="land"] .hmfoot { display: none; }
+  #hmMap[data-tab="world"] #lmView { display: none; }
+
+  /* phones: a smaller HUD so the game has room */
+  @media (max-width: 640px), (max-height: 500px) {
+    .hud { gap: 8px; }
+    .hud.tl { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(var(--gutter-l) + 6px); }
+    .hud.tr { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(var(--gutter-r) + 6px); }
+    .hud .sq { width: 36px; height: 36px; box-shadow: 0 0 0 2px var(--night), 0 0 0 4px var(--line); }
+    .hud .sq svg { width: 20px; height: 20px; }
+    .hud .stars { height: 36px; padding: 0 7px; gap: 5px; font-size: 18px; box-shadow: 0 0 0 2px var(--night), 0 0 0 4px var(--edge, var(--line)); }
+    .hud .stars svg { width: 16px; height: 16px; }
+    .hud .coin { width: 14px; height: 14px; }
+    #fishChip .fishico { width: 16px; height: 10px; }
+    #hmMapBtn.ping { box-shadow: 0 0 0 2px var(--night), 0 0 0 4px #E0A82E, 0 0 14px #E0A82E; }
+    #hudL { gap: 10px; }
+    .hearts i { width: 14px; height: 13px; }
+    .hearts { max-width: 80px; gap: 3px; }
+    #tracker { top: calc(54px + env(safe-area-inset-top, 0px)); padding: 2px 6px; gap: 2px; box-shadow: 0 0 0 2px var(--night), 0 0 0 4px var(--line); }
+    .tracker .slot { width: 24px; height: 26px; }
+    .tracker img { width: 22px; }
+    .tracker .slot.done::after { width: 9px; height: 5px; border-width: 3px; }
+    #atkBtn, #powBtn, #dashBtn, #fishBtn { zoom: .54; }
+    #bagBtn { zoom: 1; width: 40px; height: 40px; right: calc(var(--gutter-r) + 14px); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 0 0 2px var(--night), 0 0 0 4px #FFB86B; }
+    #bagBtn svg { width: 24px; height: 24px; }
+    #bag h2 { font-size: 22px; }
+    #bag .bagrow { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; }
+    #bag .bagit { min-height: 72px; }
+    #bag .bagit svg { width: 28px; height: 28px; }
+    .hmbox { padding: 10px; gap: 8px; }
+    .hmbox .shophead h2 { font-size: 24px; }
+    #lmView { height: calc(100vh - 190px); min-height: 0; }
+  }
+  @media (max-height: 420px) { #lmView { height: calc(100vh - 120px); } }`;
+  document.head.appendChild(css);
+
+  // ---------- the ghost roster belongs inside your house
+  const syncHud = () => {
+    try {
+      const tr = $('tracker');
+      if (tr) {
+        const want = !!wave && cur === INMAP && !$('hudL').hidden && (state === 'play' || state === 'fade');
+        if (tr.hidden === want) tr.hidden = !want;
+      }
+      const bb = $('bagBtn');
+      if (bb) { const want = !$('atkBtn').hidden && !!heroDef; if (bb.hidden === want) bb.hidden = !want; }
+    } catch (e) { }
+  };
+  setInterval(syncHud, 150);
+
+  // ---------- the Bag
+  const BAG_ICON = '<path d="M9 2h6v2h2v3h3v2h1v11h-1v2H4v-2H3V9h1V7h3V4h2zM9 4v3h6V4zM6 11v2h12v-2zM10 13v3h4v-3z" fill="currentColor"/>';
+  const bagBtn = document.createElement('button'); bagBtn.className = 'sq'; bagBtn.id = 'bagBtn'; bagBtn.hidden = true; bagBtn.setAttribute('aria-label', 'Open your bag');
+  bagBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${BAG_ICON}</svg>`;
+  $('atkBtn').after(bagBtn);
+  const bag = document.createElement('div'); bag.id = 'bag'; bag.hidden = true; bag.setAttribute('role', 'dialog'); bag.setAttribute('aria-label', 'Your bag');
+  document.body.appendChild(bag);
+  let bagSeen = store.get('bagSeen', 0);
+  const bagCount = () => myWeapons().length + ownedPowers().length;
+  const bagPing = () => bagBtn.classList.toggle('ping', !!heroDef && bagCount() > Math.max(1, bagSeen));
+  setInterval(() => { if (!bagBtn.hidden) bagPing(); }, 1000);
+  const CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v2h2v2h4V6h2V4h4v4h-2v2h-2v4h2v2h2v4h-4v-2h-2v-2h-4v2H8v2H4v-4h2v-2h2v-4H6V8H4z" fill="currentColor"/></svg>';
+  function drawBag() {
+    const ws = myWeapons(), cw = curW().id, ps = ownedPowers();
+    const wTiles = ws.map(id => { const w = WEAPONS[id];
+      return `<button class="bagit" data-w="${id}" style="--ic:${w.color}" aria-pressed="${id === cw}"><svg viewBox="0 0 24 24" aria-hidden="true">${WICONS[w.icon] || ''}</svg>${forgedName(id)}</button>`; }).join('');
+    const pTiles = ps.map(k => { const P = POWERS[k];
+      return `<button class="bagit" data-p="${k}" style="--ic:${P.color}" aria-pressed="${k === powerSel}"><svg viewBox="0 0 24 24" aria-hidden="true">${P.icon}</svg>${P.name}</button>`; }).join('');
+    const runes = RUNE_IDS.filter(k => runeBag[k]).map(k => `<span style="--rc:${RUNES[k].col}"><i></i>${RUNES[k].name} x${runeBag[k]}</span>`).join('');
+    bag.innerHTML = `<div class="bagbox frame"><div class="baghead"><h2 class="glowtext">Bag</h2><button class="sq" id="bagClose" aria-label="Close the bag">${CLOSE}</button></div>
+      <h3>Weapons</h3><div class="bagrow">${wTiles}</div>
+      ${ws.length < 2 ? '<p class="bagnote">Beat castle bosses and visit the shop to find more weapons.</p>' : ''}
+      ${ps.length ? `<h3>Powers</h3><div class="bagrow">${pTiles}</div>` : ''}
+      ${runes ? `<h3>Runes</h3><div class="runes">${runes}</div><p class="bagnote">Put runes in a weapon at the workbench in your house.</p>` : ''}</div>`;
+    $('bagClose').onclick = (e) => { e.stopPropagation(); closeBag(); };
+    bag.querySelectorAll('[data-w]').forEach(b => b.onclick = (e) => { e.stopPropagation(); if (b.dataset.w === curW().id) return closeBag(); equip(b.dataset.w); sfx.good(); drawBag(); setTimeout(() => { if (!bag.hidden) closeBag(); }, 260); });
+    bag.querySelectorAll('[data-p]').forEach(b => b.onclick = (e) => { e.stopPropagation(); powerSel = b.dataset.p; store.set('power', powerSel); sfx.good(); setupPowerButton(); drawBag(); setTimeout(() => { if (!bag.hidden) closeBag(); }, 260); });
+  }
+  function openBag() {
+    if (state !== 'play' || !heroDef) return;
+    sfx.tap(); state = 'bag'; paused = true; hero.path = []; marker = null; if (typeof touch !== 'undefined') touch = null; if ($('stick')) $('stick').hidden = true;
+    bagSeen = bagCount(); store.set('bagSeen', bagSeen); bagBtn.classList.remove('ping');
+    drawBag(); bag.hidden = false;
+  }
+  function closeBag() {
+    if (state !== 'bag') return;
+    bag.hidden = true; sfx.tap(); paused = false; last = performance.now(); state = 'play';
+  }
+  bagBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); audio(); openBag(); });
+  bag.addEventListener('pointerdown', (e) => { if (e.target === bag) { e.preventDefault(); closeBag(); } });
+  addEventListener('keydown', (e) => { const k = e.key.toLowerCase(); if ((k === 'b' || k === 'i') && state === 'play') openBag(); else if ((k === 'b' || k === 'i' || k === 'escape') && state === 'bag') closeBag(); });
+  window.__bag = { openBag, closeBag };
+
+  // ---------- the map of this land
+  const box = document.querySelector('#hmMap .hmbox'), mapLayer = $('hmMap');
+  const head = box.querySelector('.shophead');
+  const tabs = document.createElement('div'); tabs.className = 'tabs hmtabs';
+  tabs.innerHTML = '<button class="tab" id="lmTabLand" aria-pressed="true">This land</button><button class="tab" id="lmTabWorld" aria-pressed="false">World</button>';
+  head.after(tabs);
+  const view = document.createElement('div'); view.id = 'lmView';
+  view.innerHTML = `<canvas id="lmCv"></canvas><div class="lmtip" id="lmTip">Pinch or drag to look around</div><div class="lmz">
+    <button class="sq" id="lmIn" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z" fill="currentColor"/></svg></button>
+    <button class="sq" id="lmOut" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v4H3z" fill="currentColor"/></svg></button>
+    <button class="sq" id="lmMe" aria-label="Find me"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM9 7h6v2h2v6h-2v2H9v-2H7V9h2z" fill="currentColor"/></svg></button></div>`;
+  $('hmMapCv').before(view);
+  const cv = $('lmCv');
+  let tab = 'land', img = null, z = 1, zFit = 1, px = 0, py = 0, lm = null;
+  const setTab = (t) => {
+    tab = t; mapLayer.dataset.tab = t;
+    $('lmTabLand').setAttribute('aria-pressed', t === 'land'); $('lmTabWorld').setAttribute('aria-pressed', t === 'world');
+    if (t === 'land') { sizeView(); drawLand(); } else hmDrawMap();
+  };
+  $('lmTabLand').onclick = (e) => { e.stopPropagation(); sfx.tap(); setTab('land'); };
+  $('lmTabWorld').onclick = (e) => { e.stopPropagation(); sfx.tap(); setTab('world'); };
+
+  const landName = (m) => {
+    if (m === INMAP) return houseHero ? houseHero.name + "'s house" : 'Your house';
+    if (m === OUTMAP) return 'Rainbow Town';
+    if (m.castle) { const g = GHOSTS.find(g => g.id === m.castle); return g ? g.name + (g.name.endsWith('s') ? "' Castle" : "'s Castle") : 'Castle'; }
+    if (m.name) return m.name;
+    const a = HM_AREAS.find(a => a.id === m.landId); return a ? a.name : 'Here';
+  };
+  // signposts: the ways out of this land. Secret places only show once you have found them.
+  function signs(m) {
+    const out = [];
+    for (const [k, e] of Object.entries(m.entries || {})) {
+      if (!e || typeof e.x !== 'number') continue;
+      let label = null, col = '#FFD23F';
+      const a = HM_AREAS.find(a => a.id === k);
+      if (a) {
+        if (hmAreaOf(m) === a.id) continue;
+        if (hmSeen(a.id)) { label = a.name; col = a.color; } else if (a.secret) continue; else label = '?';
+      } else if (k.startsWith('castle_')) {
+        const g = GHOSTS.find(g => g.id === k.slice(7)); if (!g) continue;
+        label = g.name + (g.name.endsWith('s') ? "' Castle" : "'s Castle") + (flags['boss_' + g.id] ? ' ✓' : ''); col = g.color;
+      } else continue;
+      out.push({ x: e.x, y: e.y, label, col });
+    }
+    if (m === OUTMAP && OUTMAP.houses && OUTMAP.houses[home]) { const d = OUTMAP.houses[home].door; out.push({ x: d.x, y: d.y, label: 'Your house', col: '#FF6FB5' }); }
+    return out;
+  }
+  function buildImage() {
+    const m = cur; if (!m || !m.bg) return null;
+    const c = mk(m.bg.width, m.bg.height), x = c.getContext('2d');
+    x.fillStyle = '#0E0920'; x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(m.bg, 0, 0); if (m.fg) x.drawImage(m.fg, 0, 0);
+    return c;
+  }
+  function sizeView() {
+    const r = view.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+    const w = Math.max(10, Math.round(r.width * d)), h = Math.max(10, Math.round(r.height * d));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    if (img) { const nf = Math.min(r.width / img.width, r.height / img.height); if (Math.abs(nf - zFit) > 1e-6) { const wasFit = z <= zFit + 1e-6; zFit = nf; if (wasFit) z = zFit; } }
+  }
+  const zMax = () => Math.max(zFit * 6, 3);
+  function clampPan() {
+    const r = view.getBoundingClientRect(), W = img.width * z, H = img.height * z;
+    px = W <= r.width ? (r.width - W) / 2 : Math.min(0, Math.max(r.width - W, px));
+    py = H <= r.height ? (r.height - H) / 2 : Math.min(0, Math.max(r.height - H, py));
+  }
+  function zoomAt(nz, cx, cy) {
+    nz = Math.max(zFit, Math.min(zMax(), nz));
+    const wx = (cx - px) / z, wy = (cy - py) / z; z = nz; px = cx - wx * z; py = cy - wy * z; clampPan(); drawLand();
+  }
+  function centerOn(wx, wy) { const r = view.getBoundingClientRect(); px = r.width / 2 - wx * z; py = r.height / 2 - wy * z; clampPan(); }
+  let tPulse = 0, raf = 0;
+  function drawLand() {
+    if (!img) return;
+    const r = view.getBoundingClientRect(), d = cv.width / Math.max(1, r.width), x = cv.getContext('2d');
+    x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = '#0E0920'; x.fillRect(0, 0, cv.width, cv.height);
+    x.setTransform(d * z, 0, 0, d * z, d * px, d * py);
+    x.imageSmoothingEnabled = z * d < 1.5; x.imageSmoothingQuality = 'high';
+    x.drawImage(img, 0, 0);
+    // labels at screen size so they stay easy to read
+    x.setTransform(d, 0, 0, d, 0, 0);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '700 13px "Pixelify Sans", "Courier New", monospace';
+    for (const s of lm.signs) {
+      const w = x.measureText(s.label).width + 12;
+      const sx = Math.max(w / 2 + 2, Math.min(r.width - w / 2 - 2, px + s.x * z)), sy = Math.max(12, Math.min(r.height - 12, py + s.y * z - 6));
+      x.fillStyle = 'rgba(14,9,32,.82)'; x.fillRect(sx - w / 2, sy - 10, w, 20);
+      x.strokeStyle = s.col; x.lineWidth = 2; x.strokeRect(sx - w / 2 + 1, sy - 9, w - 2, 18);
+      x.fillStyle = s.label === '?' ? '#B9AEE0' : '#FFFFFF'; x.fillText(s.label, sx, sy + 1);
+    }
+    // you are here
+    const hx = px + hero.x * z, hy = py + (hero.y - 6) * z, pr = 7 + Math.sin(tPulse * 5) * 2;
+    x.strokeStyle = 'rgba(255,111,181,.6)'; x.lineWidth = 3; x.beginPath(); x.arc(hx, hy, pr + 6, 0, 7); x.stroke();
+    x.fillStyle = heroDef ? heroDef.glow || '#FF6FB5' : '#FF6FB5'; x.strokeStyle = '#FFFFFF'; x.lineWidth = 2.5; x.beginPath(); x.arc(hx, hy, 7, 0, 7); x.fill(); x.stroke();
+    x.font = '700 13px "Pixelify Sans", "Courier New", monospace';
+    const lw = x.measureText('You').width + 10; x.fillStyle = '#FFFFFF'; x.fillRect(hx - lw / 2, hy - 30, lw, 16); x.fillStyle = '#1A1033'; x.fillText('You', hx, hy - 21);
+  }
+  function loop(t) { if (mapLayer.hidden || tab !== 'land') { raf = 0; return; } tPulse = t / 1000; drawLand(); raf = requestAnimationFrame(loop); }
+
+  function openLand() {
+    img = buildImage(); lm = { signs: signs(cur) };
+    $('hmMapSub').textContent = landName(cur);
+    sizeView(); z = zFit;
+    const r = view.getBoundingClientRect();
+    // start filled to the edges and centred on you; zoom out to see the whole land
+    if (img) { z = Math.min(zMax(), Math.max(r.width / img.width, r.height / img.height)); centerOn(hero.x, hero.y); }
+    $('lmTip').hidden = false; setTimeout(() => { if ($('lmTip')) $('lmTip').hidden = true; }, 3500);
+    drawLand(); if (!raf) raf = requestAnimationFrame(loop);
+  }
+  const _open = hmOpenMap;
+  hmOpenMap = function (...a) {
+    const r = _open(...a);
+    if (state !== 'hmmap') return r;
+    tab = 'land'; mapLayer.dataset.tab = 'land';
+    $('lmTabLand').setAttribute('aria-pressed', 'true'); $('lmTabWorld').setAttribute('aria-pressed', 'false');
+    try { if (cur && cur.bg) openLand(); else setTab('world'); } catch (e) { console.warn(e); setTab('world'); }
+    return r;
+  };
+  // the world tab still shows Ollie's line and place count
+  const _wt = $('lmTabWorld').onclick;
+  $('lmTabWorld').onclick = (e) => { _wt(e); const n = HM_AREAS.filter(a => hmSeen(a.id)).length + (flags.hm_shack_found ? 1 : 0); $('hmMapSub').textContent = `You have found ${n} place${n === 1 ? '' : 's'}.`; };
+  $('lmTabLand').onclick = (e) => { e.stopPropagation(); sfx.tap(); setTab('land'); $('hmMapSub').textContent = landName(cur); };
+  addEventListener('resize', () => { if (!mapLayer.hidden && tab === 'land' && img) { sizeView(); clampPan(); drawLand(); } });
+
+  // pinch, drag, wheel, double tap
+  const pts = new Map(); let pinch = null, lastTap = 0;
+  const local = (e) => { const r = view.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  view.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.lmz')) return;
+    e.preventDefault(); e.stopPropagation(); view.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z }; }
+    if (pts.size === 1) { const now = performance.now(); if (now - lastTap < 300) { const [cx, cy] = local(e); zoomAt(z * 2 > zMax() ? zFit : z * 2, cx, cy); lastTap = 0; } else lastTap = now; }
+  });
+  view.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId) || !img) return;
+    const prev = pts.get(e.pointerId), now = local(e); pts.set(e.pointerId, now);
+    if (pts.size >= 2 && pinch) {
+      const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      px += (now[0] - prev[0]) / 2; py += (now[1] - prev[1]) / 2;
+      zoomAt(pinch.z * d / Math.max(1, pinch.d), mx, my);
+    } else { px += now[0] - prev[0]; py += now[1] - prev[1]; if (Math.hypot(now[0] - prev[0], now[1] - prev[1]) > 2) lastTap = 0; clampPan(); drawLand(); }
+  });
+  const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+  view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
+  view.addEventListener('click', (e) => e.stopPropagation());
+  view.addEventListener('wheel', (e) => { e.preventDefault(); const [cx, cy] = local(e); zoomAt(z * (e.deltaY < 0 ? 1.2 : 1 / 1.2), cx, cy); }, { passive: false });
+  const mid = () => { const r = view.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
+  $('lmIn').onclick = (e) => { e.stopPropagation(); sfx.tap(); zoomAt(z * 1.5, ...mid()); };
+  $('lmOut').onclick = (e) => { e.stopPropagation(); sfx.tap(); zoomAt(z / 1.5, ...mid()); };
+  $('lmMe').onclick = (e) => { e.stopPropagation(); sfx.tap(); if (z < zFit * 1.8) z = Math.min(zMax(), zFit * 2.4); centerOn(hero.x, hero.y); drawLand(); };
+  window.__lmap = { get z() { return z; }, get zFit() { return zFit; }, get px() { return px; }, get tab() { return tab; }, signs: () => lm && lm.signs };
+}
 
 window.__g = { get state() { return state; }, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
 </script>
