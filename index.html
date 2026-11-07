@@ -4236,142 +4236,351 @@ function leaveTitle() {
 $('title').addEventListener('click', leaveTitle);
 addEventListener('keydown', (e) => { if (titleUp && !$('title').hidden && (e.key === 'Enter' || e.key === ' ')) leaveTitle(); });
 
-// ================================================================ music: one original heroic theme ("Rainbow Rising"), rearranged for each place
-// Melody and chords are written in eighth-note steps; each place plays the same tune with its own speed, key, mood and drums.
-const THEME = {
-  // [note, length in eighths]; '.' is a rest. Section A (8 bars) then B (8 bars).
-  lead: [
-    ['D5', 3], ['A4', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
-    ['G5', 2], ['F#5', 1], ['E5', 1], ['D5', 2], ['A4', 2],
-    ['B4', 3], ['C#5', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
-    ['E5', 6], ['.', 2],
-    ['D5', 3], ['A4', 1], ['D5', 1], ['E5', 1], ['F#5', 2],
-    ['A5', 3], ['G5', 1], ['F#5', 1], ['G5', 1], ['A5', 2],
-    ['B5', 2], ['A5', 1], ['G5', 1], ['F#5', 2], ['E5', 2],
-    ['D5', 6], ['.', 2],
-    ['B4', 2], ['C#5', 2], ['D5', 2], ['B4', 2],
-    ['A4', 4], ['F#4', 4],
-    ['G4', 2], ['A4', 2], ['B4', 2], ['D5', 2],
-    ['C#5', 6], ['A4', 2],
-    ['B4', 2], ['C#5', 2], ['D5', 2], ['F#5', 2],
-    ['E5', 4], ['D5', 2], ['C#5', 2],
-    ['D5', 2], ['E5', 2], ['F#5', 2], ['G5', 2],
-    ['A5', 6], ['.', 2],
-  ],
-  // one chord per bar: root and the two notes above it
-  chords: ['D', 'G', 'Bm', 'A', 'D', 'F#m', 'G', 'D', 'Bm', 'F#m', 'G', 'A', 'Bm', 'A', 'G', 'A'],
+// ================================================================ music: an original synth soundtrack (warm pads, singing synth leads, driving octave bass)
+// in the spirit of old castle adventure games, kept bright and friendly for kids. Everything is played live with Web Audio.
+//
+// HOW TO ADD MUSIC FOR A NEW PLACE (new towns, the train, the castle island...)
+//   1. Write a track:   addTrack('harbor', { bpm, chords, lead, bass, arp, drums, patch })   (format below), or reuse
+//      a tune with a new key, speed or sound:   addTrack('harbor', { base: 'town', tr: 2, bpm: 96, patch: { lead: 'bell' } })
+//   2. Say when it plays, either way works:
+//      - give the map a field   music: 'harbor'
+//      - or add a rule:          addMusicRule(() => state === 'boat' ? 'harbor' : null)   (newest rule wins; return a
+//        track name, [name, semitones], or null to let the next rule decide)
+//
+// TRACK FORMAT
+//   bpm      quarter notes per minute. One step is a 16th note. A bar is 16 steps (or `bar: 12` for a waltz).
+//   chords   one chord per bar: 'Dm Bb C A ...' (kinds: m, 7, m7, maj7, sus2, sus4, dim, aug)
+//   lead     the tune: 'D5/6 A4/2 - /4 ...'  note/length-in-steps; '-' is a rest; '|' is ignored (use it between bars)
+//   bass     one bar of steps: r root, o root up an octave, f fifth, F fifth up an octave, . nothing
+//   arp      one bar of steps: digits pick chord notes (0 1 2 = root third fifth, 3 4 5 = same an octave up), . nothing
+//   drums    { k: kick, s: snare, h: hat } one bar each: x hit, o soft hit, . nothing.  fill: the same, used on every 8th bar
+//   patch    sounds: { lead, pad, arp, bass } from PATCH below (pad: null for none)
+//   mix      volume of each part, 1 = normal: { lead, pad, arp, bass, drums };  fx: { delay, verb } echo and room amounts
+//   tr       move the whole track up or down by semitones
+const PATCH = {
+  // osc: [wave, frequency ratio, detune in cents, level]; a d s r = envelope; cut = lowpass Hz (cutEnv: start at cut * this);
+  // vib = [speed Hz, depth, delay before it starts]
+  square: { osc: [['square', 1, 0, 0.55], ['sawtooth', 1, 7, 0.35]], a: 0.008, d: 0.14, s: 0.72, r: 0.12, cut: 3000, cutEnv: 1.8, cutT: 0.08, q: 1, vib: [5.6, 0.006, 0.2] },
+  brass:  { osc: [['sawtooth', 1, -6, 0.5], ['sawtooth', 1, 6, 0.5]], a: 0.02, d: 0.16, s: 0.75, r: 0.12, cut: 2200, cutEnv: 2.2, cutT: 0.12, q: 2, vib: [5.8, 0.006, 0.18] },
+  flute:  { osc: [['triangle', 1, 0, 1], ['sine', 2, 0, 0.18]], a: 0.04, d: 0.2, s: 0.85, r: 0.16, vib: [5, 0.006, 0.22], lvl: 1.5 },
+  bell:   { osc: [['sine', 1, 0, 1], ['sine', 4, 0, 0.16], ['triangle', 2, 0, 0.12]], a: 0.003, d: 0.4, s: 0, r: 0.3, lvl: 1.4 },
+  pluck:  { osc: [['square', 1, 0, 1]], a: 0.003, d: 0.12, s: 0.25, r: 0.06, cut: 1700, cutEnv: 2.6, cutT: 0.05, q: 2 },
+  harpsi: { osc: [['sawtooth', 1, 0, 0.7], ['square', 2, 0, 0.22]], a: 0.002, d: 0.2, s: 0.12, r: 0.08, cut: 2600, cutEnv: 1.5, cutT: 0.06 },
+  strings:{ osc: [['sawtooth', 1, -9, 0.5], ['sawtooth', 1, 9, 0.5]], a: 0.55, d: 1, s: 0.85, r: 0.9, cut: 1150, cutEnv: 0.35, cutT: 0.6, q: 0.5 },
+  choir:  { osc: [['triangle', 1, -7, 0.6], ['sawtooth', 1, 7, 0.22], ['sine', 2, 0, 0.18]], a: 0.9, d: 1, s: 0.9, r: 1.3, cut: 1400, cutEnv: 0.4, cutT: 0.8, vib: [4.4, 0.004, 0.6], lvl: 1.3 },
+  organ:  { osc: [['triangle', 1, 0, 0.7], ['sine', 2, 0, 0.35], ['sine', 3, 0, 0.14], ['sine', 4, 0, 0.1]], a: 0.06, d: 0.3, s: 0.9, r: 0.35, lvl: 1.2 },
+  pulse:  { osc: [['square', 1, 0, 0.7], ['triangle', 1, 0, 0.5]], a: 0.004, d: 0.1, s: 0.6, r: 0.05, cut: 900, cutEnv: 2, cutT: 0.06, q: 3 },
+  round:  { osc: [['triangle', 1, 0, 1], ['square', 1, 0, 0.12]], a: 0.01, d: 0.25, s: 0.7, r: 0.12, cut: 700, lvl: 1.2 },
 };
-const CHORD = { D: ['D', 'F#', 'A'], G: ['G', 'B', 'D'], Bm: ['B', 'D', 'F#'], A: ['A', 'C#', 'E'], 'F#m': ['F#', 'A', 'C#'] };
-const PC = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, Bb: 10, B: 11 };
-// D major to D minor: F#->F, C#->C, B->Bb
-const MINOR = { 6: 5, 1: 0, 11: 10 };
-const ARR = {
-  title:  { bpm: 132, bars: [0, 16], lead: 'square', vol: 1, arp: true, bass: true, drums: 'march', tr: 0 },
-  town:   { bpm: 104, bars: [0, 8], lead: 'triangle', vol: 0.75, arp: true, bass: true, drums: null, tr: 0, soft: true },
-  field:  { bpm: 144, bars: [0, 16], lead: 'square', vol: 0.8, arp: false, bass: true, drums: 'run', tr: 0 },
-  dark:   { bpm: 84, bars: [0, 8], lead: 'triangle', vol: 0.85, arp: true, bass: true, drums: 'slow', tr: 0, minor: true, soft: true },
-  castle: { bpm: 112, bars: [8, 16], lead: 'square', vol: 0.75, arp: true, bass: true, drums: 'slow', tr: -2, minor: true },
-  fly:    { bpm: 116, bars: [0, 16], lead: 'triangle', vol: 0.8, arp: true, bass: true, drums: 'slow', tr: 7, soft: true },
-  boss:   { bpm: 176, bars: [8, 16], lead: 'sawtooth', vol: 0.75, arp: true, bass: true, drums: 'run', tr: -2, minor: true },
-};
-const LAND_TR = { meadow: 0, woods: -2, frost: 3, peak: 5 };
-const mus = { cur: null, want: null, step: 0, next: 0, bus: null, noise: null, timer: null, events: [], gainT: 0, tr: 0 };
-function noteHz(name, a) {
-  const m = name.match(/^([A-G][#b]?)(\d)$/); let pc = PC[m[1]], oct = +m[2];
-  if (a.minor && MINOR[pc] !== undefined) pc = MINOR[pc];
-  const midi = 12 * (oct + 1) + pc + a.tr + mus.tr;
-  return 440 * Math.pow(2, (midi - 69) / 12);
+const TRACKS = {}, trackCache = {};
+function addTrack(name, def) { TRACKS[name] = def; delete trackCache[name]; }
+const MUSIC_RULES = [];
+function addMusicRule(fn) { MUSIC_RULES.unshift(fn); }
+
+// ---------------------------------------------------------------- the tracks (all original)
+// Title: "Beacon of Seven Colors" - D minor that lifts into F major and lands on a bright D major
+addTrack('title', {
+  bpm: 128, patch: { lead: 'square', pad: 'strings', arp: 'pluck', bass: 'pulse' },
+  chords: 'Dm Bb C A  Dm Bb Gm A  F C Dm A  Bb C D D',
+  lead: `D5/6 A4/2 D5/2 E5/2 F5/4 | G5/4 F5/2 E5/2 D5/4 Bb4/4 | C5/6 D5/2 E5/2 F5/2 G5/4 | A5/8 E5/2 F5/2 E5/2 C#5/2 |
+         D5/6 A4/2 D5/2 E5/2 F5/4 | Bb5/4 A5/2 G5/2 F5/4 D5/4 | G5/4 F5/2 G5/2 A5/4 Bb5/4 | A5/12 -/4 |
+         C6/4 A5/4 F5/4 A5/4 | G5/4 E5/4 C5/4 E5/4 | F5/4 E5/2 D5/2 A5/8 | E5/2 F5/2 G5/2 F5/2 E5/8 |
+         D5/4 F5/4 Bb5/4 A5/4 | G5/4 E5/4 C5/4 G5/4 | F#5/4 A5/4 D6/8 | A5/4 F#5/4 D5/8`,
+  bass: 'r.o.r.o.r.o.r.o.', arp: '0.2.4.2.1.3.5.3.',
+  drums: { k: 'x.....x.x.......', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
+  fill:  { k: 'x.....x.x.......', s: '....x...x.x.xxxx', h: 'x.x.x.x.........' },
+});
+// Town: "Lantern Lane" - a calm F major stroll with a flute, music box and soft strings
+addTrack('town', {
+  bpm: 92, patch: { lead: 'flute', pad: 'strings', arp: 'bell', bass: 'round' }, mix: { lead: 0.8, pad: 0.8, arp: 0.7 }, fx: { delay: 1.3, verb: 1.2 },
+  chords: 'F Am Bb C  F Dm Gm C  Dm Am Bb F  Gm Am Bb C',
+  lead: `A4/4 C5/4 F5/6 E5/2 | E5/8 C5/4 A4/4 | D5/4 F5/4 Bb5/6 A5/2 | G5/12 -/4 |
+         A5/4 G5/4 F5/4 C5/4 | D5/4 F5/4 A5/8 | Bb5/4 A5/4 G5/4 D5/4 | E5/8 C5/8 |
+         F5/6 E5/2 D5/8 | C5/6 D5/2 E5/8 | F5/4 G5/4 A5/4 Bb5/4 | A5/8 F5/8 |
+         G5/6 F5/2 D5/8 | E5/6 F5/2 G5/8 | F5/4 D5/4 Bb4/4 D5/4 | C5/4 E5/4 G5/8`,
+  bass: 'r.......f.......', arp: '0.1.2.1.3.2.1.2.',
+  drums: { k: '', s: '', h: '..o...o...o...o.' },
+});
+// Inside a saved house: the town tune, slower and cosier
+addTrack('home', { base: 'town', bpm: 82, tr: 5, drums: null, patch: { lead: 'bell' }, mix: { lead: 0.9, pad: 0.7, arp: 0.5 } });
+// Lands: "Over the Gloomy Hills" - the classic galloping adventure, A minor with a bright E major turn
+addTrack('field', {
+  bpm: 150, patch: { lead: 'square', pad: 'strings', arp: 'pluck', bass: 'pulse' }, mix: { pad: 0.6, arp: 0.7 },
+  chords: 'Am F G Am  Am F G E  F G Em Am  F G E E',
+  lead: `A4/2 C5/2 E5/2 A5/6 G5/2 E5/2 | F5/4 E5/2 D5/2 C5/4 A4/4 | B4/2 D5/2 G5/2 B5/6 A5/2 G5/2 | A5/12 -/4 |
+         A4/2 C5/2 E5/2 A5/6 B5/2 C6/2 | C6/4 B5/2 A5/2 F5/4 A5/4 | G5/4 F5/2 E5/2 D5/4 B4/4 | B4/2 E5/2 G#5/2 B5/6 -/4 |
+         A5/6 G5/2 F5/4 C5/4 | D5/2 E5/2 F5/2 G5/6 B5/4 | B5/6 A5/2 G5/4 E5/4 | C6/4 B5/2 A5/2 E5/8 |
+         F5/2 A5/2 C6/4 A5/4 F5/4 | G5/2 B5/2 D6/4 B5/4 G5/4 | G#5/4 A5/2 B5/2 C6/4 D6/4 | E6/8 D6/2 C6/2 B5/2 G#5/2`,
+  bass: 'r.o.r.o.r.o.r.o.', arp: '0124012401240124',
+  drums: { k: 'x.......x.x.....', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
+  fill:  { k: 'x.......x.x.....', s: '....x...x.x.xxxx', h: 'x.x.x.x.........' },
+});
+addTrack('woods', { base: 'field', bpm: 138, tr: -2, patch: { lead: 'flute', arp: 'harpsi' } });
+addTrack('frost', { base: 'field', bpm: 140, tr: 3, patch: { arp: 'bell' }, mix: { arp: 1 }, fx: { delay: 1.4, verb: 1.4 } });
+addTrack('peak',  { base: 'field', bpm: 156, tr: 5, patch: { lead: 'brass' } });
+// Ghost castles: "Halls of the Ghost Castle" - pipe organ, harpsichord and a galloping bass, D minor
+addTrack('castle', {
+  bpm: 120, patch: { lead: 'square', pad: 'organ', arp: 'harpsi', bass: 'pulse' }, mix: { pad: 0.7, arp: 0.6 }, fx: { verb: 1.5 },
+  chords: 'Dm Dm Bb A  Gm Dm E A  Dm C Bb A  Gm Bb A A',
+  lead: `D5/2 E5/2 F5/2 A5/2 D6/6 C6/2 | A5/4 F5/2 A5/2 D5/8 | Bb5/4 A5/2 G5/2 F5/2 G5/2 A5/4 | C#6/4 A5/4 E5/4 C#5/4 |
+         G5/2 A5/2 Bb5/2 D6/2 G5/8 | F5/2 G5/2 A5/2 D6/2 F5/8 | E5/2 F5/2 G#5/2 B5/2 D6/4 C6/2 B5/2 | A5/8 E5/4 C#5/4 |
+         F5/6 E5/2 D5/4 A4/4 | E5/6 D5/2 C5/4 G4/4 | D5/6 C5/2 Bb4/4 F5/4 | E5/4 C#5/4 A4/8 |
+         Bb4/2 D5/2 G5/2 Bb5/2 A5/4 G5/4 | F5/2 G5/2 A5/2 Bb5/2 C6/4 D6/4 | C#6/2 B5/2 A5/2 G5/2 F5/2 E5/2 D5/2 C#5/2 | A4/2 C#5/2 E5/2 A5/2 -/8`,
+  bass: 'r.oor.oor.oor.oo', arp: '0.1.2.3.4.3.2.1.',
+  drums: { k: 'x.......x.......', s: '....x.......x...', h: '..x...x...x...x.' },
+  fill:  { k: 'x.......x.......', s: '....x.....x.x.xx', h: '..x...x.........' },
+});
+// Boss fights: "Big Ghost Showdown" - fast and brassy, E minor
+addTrack('boss', {
+  bpm: 168, patch: { lead: 'brass', pad: 'strings', arp: 'pluck', bass: 'pulse' }, mix: { pad: 0.6, arp: 0.6, drums: 0.8 },
+  chords: 'Em C D B  Em C Am B',
+  lead: `E5/2 E5/1 E5/1 G5/2 B5/2 E6/4 D6/2 B5/2 | C6/4 B5/2 A5/2 G5/4 E5/4 | F#5/2 F#5/1 F#5/1 A5/2 D6/2 C6/2 B5/2 A5/4 | B5/6 A5/2 G5/2 F#5/2 D#5/4 |
+         E5/2 G5/2 B5/2 E5/2 G5/2 B5/2 E6/4 | D6/2 C6/2 B5/2 A5/2 G5/4 E5/4 | A5/2 B5/2 C6/4 B5/2 A5/2 E5/4 | D#5/2 F#5/2 A5/2 B5/2 -/2 B4/2 D#5/2 F#5/2`,
+  bass: 'r.o.r.o.r.o.r.o.', arp: '0123012301230123',
+  drums: { k: 'x...x...x...x...', s: '....x.......x..o', h: 'xoxoxoxoxoxoxoxo' },
+  fill:  { k: 'x...x...x...x...', s: '....x...x.xxxxxx', h: 'xoxoxoxo........' },
+});
+// Story and ending, the sad parts: "Shadow Over the Beacon" - slow, misty, a little mysterious but never scary
+addTrack('dark', {
+  bpm: 76, patch: { lead: 'flute', pad: 'choir', arp: 'bell', bass: 'round' }, mix: { lead: 0.8, arp: 0.6 }, fx: { delay: 1.4, verb: 1.6 },
+  chords: 'Cm Ab Eb Bb  Cm Ab Fm G',
+  lead: `G4/8 C5/4 D5/4 | Eb5/12 C5/4 | Bb4/8 G4/4 Bb4/4 | D5/12 -/4 |
+         G5/8 F5/4 Eb5/4 | C5/12 Eb5/4 | F5/6 Eb5/2 D5/4 C5/4 | B4/12 -/4`,
+  bass: 'r...............', arp: '0...2...4...2...', drums: null,
+});
+// Firefly Pond: "Firefly Night" - dreamy and sparkly, G major
+addTrack('fly', {
+  bpm: 108, patch: { lead: 'flute', pad: 'strings', arp: 'bell', bass: 'round' }, mix: { pad: 0.7, arp: 0.6 }, fx: { delay: 1.4 },
+  chords: 'G D Em C  G D C D',
+  lead: `B4/4 D5/4 G5/6 F#5/2 | A5/8 F#5/4 D5/4 | E5/4 G5/4 B5/6 A5/2 | G5/8 E5/4 C5/4 |
+         D5/4 G5/4 B5/4 D6/4 | C6/4 A5/4 F#5/4 D5/4 | E5/4 G5/4 C6/4 B5/4 | A5/12 -/4`,
+  bass: 'r...f...r...f...', arp: '0124212401242124',
+  drums: { k: 'o.......o.......', s: '', h: '..o...o...o...o.' },
+});
+// Phase 2, the train: "Rails Through the Night" - chugging gallop bass, B minor
+addTrack('train', {
+  bpm: 156, patch: { lead: 'square', pad: 'strings', arp: 'pluck', bass: 'pulse' }, mix: { pad: 0.6, arp: 0.6 },
+  chords: 'Bm G A F#  Bm G Em F#',
+  lead: `B4/2 D5/2 F#5/2 B5/6 A5/2 F#5/2 | G5/4 F#5/2 E5/2 D5/4 B4/4 | C#5/2 E5/2 A5/2 C#6/6 B5/2 A5/2 | A#5/8 F#5/4 C#5/4 |
+         B5/2 A5/2 B5/2 D6/2 C#6/2 B5/2 A5/2 F#5/2 | G5/4 B5/4 D6/4 B5/4 | E5/2 F#5/2 G5/2 B5/2 E6/4 D6/4 | C#6/6 A#5/2 F#5/8`,
+  bass: 'r.oor.oor.oor.oo', arp: '0.2.1.2.0.2.1.2.',
+  drums: { k: 'x.......x.......', s: '....x.......x...', h: 'xoxoxoxoxoxoxoxo' },
+  fill:  { k: 'x.......x.......', s: '....x...x.x.xxxx', h: 'xoxoxoxo........' },
+});
+// Phase 2, the castle island: "The Enchanted Isle" - a magical music-box waltz in E minor
+addTrack('isle', {
+  bpm: 150, bar: 12, patch: { lead: 'bell', pad: 'choir', arp: 'harpsi', bass: 'round' }, mix: { lead: 1.1, pad: 0.7, arp: 0.45 }, fx: { delay: 1.2, verb: 1.5 },
+  chords: 'Em Em Am B  Em G C B  Em Am D G  C Am B Em',
+  lead: `B4/4 E5/6 G5/2 | F#5/4 E5/8 | E5/4 A5/6 C6/2 | B5/8 F#5/4 |
+         B4/4 E5/6 G5/2 | B5/4 D6/8 | C6/4 B5/4 A5/4 | D#5/8 B4/4 |
+         G5/4 B5/6 A5/2 | E5/4 C6/6 B5/2 | A5/4 F#5/6 D5/2 | G5/8 B4/4 |
+         E5/4 G5/4 C6/4 | C6/4 B5/2 A5/2 E5/4 | F#5/4 B5/4 D#5/4 | E5/12`,
+  bass: 'r...o...o...', arp: '..1.2...1.2.',
+  drums: { k: 'o...........', s: '', h: '....o...o...' },
+});
+// Phase 2 state 'train' plays the train track (the train level can override this with its own rule)
+addMusicRule(() => typeof state !== 'undefined' && state === 'train' ? 'train' : null);
+
+// ---------------------------------------------------------------- turning tracks into notes
+const PC = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+const KIND = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], sus2: [0, 2, 7], sus4: [0, 5, 7], dim: [0, 3, 6], aug: [0, 4, 8] };
+function noteMidi(n) { const m = n.match(/^([A-G][#b]?)(\d)$/); return 12 * (+m[2] + 1) + PC[m[1]]; }
+function parseChord(c) { const m = c.match(/^([A-G][#b]?)(.*)$/); return { pc: PC[m[1]], ints: KIND[m[2]] || KIND[''] }; }
+function resolveTrack(name) {
+  const d = TRACKS[name]; if (!d) return null;
+  if (!d.base) return d;
+  const b = resolveTrack(d.base), out = Object.assign({}, b, d);
+  for (const k of ['patch', 'mix', 'fx']) out[k] = Object.assign({}, b[k], d[k]);
+  out.tr = d.tr !== undefined ? d.tr : b.tr; delete out.base;
+  return out;
 }
-// flatten the lead into a list of [startStep, note, length]
-const LEAD = (() => { const out = []; let t = 0; for (const [n, l] of THEME.lead) { if (n !== '.') out.push([t, n, l]); t += l; } return out; })();
+function compileTrack(name) {
+  if (trackCache[name]) return trackCache[name];
+  const d = resolveTrack(name); if (!d) return null;
+  const bar = d.bar || 16, names = d.chords.trim().split(/\s+/), chords = names.map(parseChord), len = chords.length * bar;
+  const T = { bpm: d.bpm, bar, len, chords, tr: d.tr || 0, patch: Object.assign({ lead: 'square', pad: 'strings', arp: 'pluck', bass: 'pulse' }, d.patch),
+    mix: Object.assign({ lead: 1, pad: 1, arp: 1, bass: 1, drums: 1 }, d.mix), fx: Object.assign({ delay: 1, verb: 1 }, d.fx),
+    drums: d.drums || null, fill: d.fill || null, lead: {}, pad: {}, bass: [], arp: [] };
+  // tune
+  let t = 0;
+  for (const tok of (d.lead || '').split(/[\s|]+/).filter(Boolean)) {
+    const [n, l] = tok.split('/'), steps = +(l || 4);
+    if (n !== '-') T.lead[t] = [noteMidi(n), steps];
+    t += steps;
+  }
+  // pads: one held chord, kept going while the next bars repeat it
+  for (let b = 0; b < chords.length; b++) {
+    if (b > 0 && names[b] === names[b - 1]) continue;
+    let run = 1; while (b + run < chords.length && names[b + run] === names[b]) run++;
+    const { pc, ints } = chords[b];
+    T.pad[b * bar] = [ints.map(i => { let m = 48 + pc + i; while (m < 53) m += 12; while (m >= 65) m -= 12; return m; }).sort((x, y) => x - y), run * bar];
+  }
+  // bass and arpeggio: how long each hit lasts (until the next one, at most 4 steps)
+  const lens = p => [...p].map((c, i) => { if (c === '.') return 0; let j = 1; while (j < 4 && p[(i + j) % p.length] === '.') j++; return j; });
+  T.bassP = d.bass || ''; T.bassL = lens(T.bassP); T.arpP = d.arp || ''; T.arpL = lens(T.arpP);
+  return (trackCache[name] = T);
+}
+
+// ---------------------------------------------------------------- the synth
+const mus = { cur: null, tr: 0, T: null, step: 0, next: 0, bus: null, noise: null, timer: null, gainT: 0, duckUntil: 0, ch: null };
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+function makeVerb() {
+  const len = Math.floor(ac.sampleRate * 1.8), buf = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+  const v = ac.createConvolver(); v.buffer = buf; return v;
+}
 function musicCtx() {
   if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; } }
   if (!mus.bus) {
-    mus.bus = ac.createGain(); mus.bus.gain.value = 0; mus.bus.connect(ac.destination);
+    // music bus (faded for volume) -> gentle compressor -> speakers; every part also feeds an echo and a room sound
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
+    comp.connect(ac.destination);
+    mus.bus = ac.createGain(); mus.bus.gain.value = 0; mus.bus.connect(comp);
+    mus.fan = ac.createGain(); mus.fan.gain.value = 0.9; mus.fan.connect(comp);
+    const delay = ac.createDelay(1.5), fb = ac.createGain(), dl = ac.createBiquadFilter(), dOut = ac.createGain();
+    fb.gain.value = 0.32; dl.type = 'lowpass'; dl.frequency.value = 2200; dOut.gain.value = 0.5;
+    delay.connect(dl); dl.connect(fb); fb.connect(delay); dl.connect(dOut); dOut.connect(mus.bus);
+    const verb = makeVerb(), vOut = ac.createGain(); vOut.gain.value = 0.55; verb.connect(vOut); vOut.connect(mus.bus);
+    mus.delay = delay; mus.verbIn = verb;
+    const SENDS = { lead: [0.28, 0.25], pad: [0, 0.45], arp: [0.35, 0.2], bass: [0, 0.05], drums: [0, 0.1] };
+    mus.ch = {};
+    for (const k in SENDS) {
+      const g = ac.createGain(), sd = ac.createGain(), sv = ac.createGain();
+      g.connect(mus.bus); g.connect(sd); g.connect(sv); sd.connect(delay); sv.connect(verb);
+      mus.ch[k] = { g, sd, sv, base: SENDS[k] };
+    }
     const len = ac.sampleRate * 0.4, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     mus.noise = buf;
   }
   return ac;
 }
-function mNote(t, hz, dur, type, vol) {
-  const o = ac.createOscillator(), g = ac.createGain();
-  o.type = type; o.frequency.value = hz;
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01);
-  g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.02, dur - 0.05)); g.gain.linearRampToValueAtTime(0, t + dur);
-  o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + dur + 0.02);
-}
-function mDrum(t, kind) {
-  if (kind === 'kick') {
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-    g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-    o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + 0.18); return;
+// one synth note: a few oscillators -> lowpass filter -> envelope -> a mixer channel
+function synth(dest, t, midi, dur, p, vol) {
+  const hz = midiHz(midi), g = ac.createGain(), rel = Math.max(t + dur, t + p.a + 0.005), end = rel + p.r * 4 + 0.05;
+  let into = g;
+  if (p.cut) {
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = p.q || 0.7;
+    f.frequency.setValueAtTime(Math.min(16000, p.cut * (p.cutEnv || 1)), t);
+    if (p.cutEnv && p.cutEnv !== 1) f.frequency.setTargetAtTime(p.cut, t + 0.002, p.cutT || 0.1);
+    f.connect(g); into = f;
   }
-  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-  s.buffer = mus.noise;
-  f.type = kind === 'hat' ? 'highpass' : 'bandpass'; f.frequency.value = kind === 'hat' ? 7000 : 1800;
-  const dur = kind === 'hat' ? 0.03 : 0.12, v = kind === 'hat' ? 0.08 : 0.25;
-  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); g.connect(mus.bus); s.start(t); s.stop(t + dur + 0.01);
+  let lg = null;
+  if (p.vib && dur > p.vib[2] + 0.05) {
+    const lfo = ac.createOscillator(); lg = ac.createGain(); lfo.frequency.value = p.vib[0];
+    lg.gain.setValueAtTime(0, t + p.vib[2]); lg.gain.linearRampToValueAtTime(hz * p.vib[1], t + p.vib[2] + 0.25);
+    lfo.connect(lg); lfo.start(t); lfo.stop(end);
+  }
+  for (const [type, ratio, det, lv] of p.osc) {
+    const o = ac.createOscillator(), og = ac.createGain();
+    o.type = type; o.frequency.value = hz * ratio; if (det) o.detune.value = det;
+    if (lg) lg.connect(o.frequency);
+    og.gain.value = lv; o.connect(og); og.connect(into); o.start(t); o.stop(end);
+  }
+  const pk = vol * (p.lvl || 1);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + p.a);
+  g.gain.setTargetAtTime(pk * p.s, t + p.a, p.d / 3);
+  g.gain.setTargetAtTime(0, rel, p.r / 3);
+  g.connect(dest);
 }
-const DRUMS = {
-  march: { kick: [0, 3, 4], snare: [2, 6, 7], hat: [0, 1, 2, 3, 4, 5, 6, 7] },
-  run: { kick: [0, 4, 5], snare: [2, 6], hat: [0, 1, 2, 3, 4, 5, 6, 7] },
-  slow: { kick: [0], snare: [4], hat: [2, 6] },
-};
-function scheduleStep(a, step, t, dt) {
-  const [b0, b1] = a.bars, total = (b1 - b0) * 8, s = b0 * 8 + (step % total), bar = Math.floor(s / 8), inBar = s % 8;
-  const lv = 0.11 * a.vol * (a.soft ? 0.8 : 1);
-  for (const [st, n, l] of LEAD) if (st === s) mNote(t, noteHz(n, a), l * dt * 0.95, a.lead, a.lead === 'sawtooth' ? lv * 0.7 : a.lead === 'triangle' ? lv * 1.6 : lv);
-  const ch = CHORD[THEME.chords[bar]];
-  if (a.bass) mNote(t, noteHz(ch[0] + (inBar % 2 ? '3' : '2'), a), dt * 0.9, 'triangle', 0.22 * a.vol);
-  if (a.arp) { const n = ch[[0, 1, 2, 1][inBar % 4]]; mNote(t, noteHz(n + '4', a), dt * 0.6, a.soft ? 'triangle' : 'square', (a.soft ? 0.07 : 0.03) * a.vol); }
-  const dr = a.drums && DRUMS[a.drums];
-  if (dr) for (const k of ['kick', 'snare', 'hat']) if (dr[k].includes(inBar)) mDrum(t, k);
+function mDrum(t, kind, v = 1) {
+  const out = mus.ch.drums.g;
+  if (kind === 'k') {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+    g.gain.setValueAtTime(0.8 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.24); return;
+  }
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), hat = kind === 'h';
+  s.buffer = mus.noise;
+  f.type = hat ? 'highpass' : 'bandpass'; f.frequency.value = hat ? 7500 : 1700; f.Q.value = hat ? 0.7 : 0.8;
+  const dur = hat ? 0.035 : 0.16, lv = (hat ? 0.1 : 0.34) * v;
+  g.gain.setValueAtTime(lv, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  s.connect(f); f.connect(g); g.connect(out); s.start(t); s.stop(t + dur + 0.01);
+  if (!hat) { // a little body under the snare
+    const o = ac.createOscillator(), og = ac.createGain(); o.type = 'triangle';
+    o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+    og.gain.setValueAtTime(0.22 * v, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(og); og.connect(out); o.start(t); o.stop(t + 0.12);
+  }
+}
+function scheduleStep(T, step, t, dt) {
+  const s = step % T.len, bar = Math.floor(s / T.bar), inBar = s % T.bar, ch = T.chords[bar], tr = T.tr + mus.tr, c = mus.ch, m = T.mix;
+  const ld = T.lead[s];
+  if (ld) synth(c.lead.g, t, ld[0] + tr, ld[1] * dt * 0.92, PATCH[T.patch.lead], 0.1 * m.lead);
+  const pd = T.pad[s];
+  if (pd && T.patch.pad) for (const n of pd[0]) synth(c.pad.g, t, n + tr, pd[1] * dt, PATCH[T.patch.pad], 0.045 * m.pad);
+  const bc = T.bassP[inBar];
+  if (bc && bc !== '.') {
+    const n = 36 + ch.pc + ({ r: 0, o: 12, f: ch.ints[2], F: ch.ints[2] + 12 })[bc];
+    synth(c.bass.g, t, (n > 47 + 12 ? n - 12 : n) + tr, T.bassL[inBar] * dt * 0.85, PATCH[T.patch.bass], 0.15 * m.bass);
+  }
+  const ac_ = T.arpP[inBar];
+  if (ac_ && ac_ !== '.' && T.patch.arp) {
+    const k = +ac_, ints = ch.ints.slice(0, 3), n = 60 + ch.pc + ints[k % 3] + 12 * Math.floor(k / 3);
+    synth(c.arp.g, t, (n >= 79 ? n - 12 : n) + tr, T.arpL[inBar] * dt * 0.8, PATCH[T.patch.arp], 0.045 * m.arp);
+  }
+  const dr = T.fill && bar % 8 === 7 ? T.fill : T.drums;
+  if (dr) for (const k of ['k', 's', 'h']) { const p = dr[k] || '', h = p[inBar % p.length]; if (h === 'x' || h === 'o') mDrum(t, k, (h === 'o' ? 0.5 : 1) * m.drums); }
 }
 function musicTick() {
-  if (!ac || ac.state !== 'running' || !mus.cur) return;
-  const a = ARR[mus.cur], dt = 60 / a.bpm / 2;
+  if (!ac || ac.state !== 'running' || !mus.T) return;
+  const T = mus.T, dt = 60 / T.bpm / 4;
   while (mus.next < ac.currentTime + 0.25) {
     if (mus.next < ac.currentTime - 0.1) mus.next = ac.currentTime + 0.05;
-    scheduleStep(a, mus.step, mus.next, dt);
+    scheduleStep(T, mus.step, mus.next, dt);
     mus.step++; mus.next += dt;
   }
-  // volume: off when muted, lower under the narrator's voice and during puzzles
+  // volume: off when muted, lower under the narrator's voice, during puzzles and under a fanfare
   let target = muted ? 0 : 0.55;
   if (typeof voEl !== 'undefined' && voEl && !voEl.paused) target *= 0.35;
-  if (state === 'puzzle') target *= 0.5;
+  if (typeof state !== 'undefined' && state === 'puzzle') target *= 0.5;
+  if (ac.currentTime < mus.duckUntil) target *= 0.2;
   if (Math.abs(target - mus.gainT) > 0.01) { mus.gainT = target; mus.bus.gain.cancelScheduledValues(ac.currentTime); mus.bus.gain.setTargetAtTime(target, ac.currentTime, 0.25); }
 }
 function playMusic(name, tr = 0) {
   if (mus.cur === name && mus.tr === tr) return;
   if (!musicCtx()) return;
+  const T = compileTrack(name); if (!T) return;
   const switching = !!mus.cur;
-  mus.cur = name; mus.tr = tr; mus.step = 0;
+  mus.cur = name; mus.tr = tr; mus.T = T; mus.step = 0;
   if (switching && mus.bus) { mus.bus.gain.cancelScheduledValues(ac.currentTime); mus.bus.gain.setValueAtTime(0, ac.currentTime); mus.gainT = 0; }
+  // echo time follows the beat (a dotted eighth), and each track sets how much echo and room it wants
+  mus.delay.delayTime.setValueAtTime(Math.min(1.4, 60 / T.bpm * 0.75), ac.currentTime);
+  for (const k in mus.ch) { const c = mus.ch[k]; c.sd.gain.value = c.base[0] * T.fx.delay; c.sv.gain.value = c.base[1] * T.fx.verb; }
   mus.next = ac.currentTime + 0.12;
   if (!mus.timer) mus.timer = setInterval(() => { musicPick(); musicTick(); }, 60);
 }
-// a short fanfare built from the theme's opening, for big wins
+// a short original fanfare for big wins: a rising D major call over a swelling chord
 function musicFanfare() {
   if (!musicCtx() || ac.state !== 'running' || muted) return;
   const t = ac.currentTime + 0.05, d = 0.11;
-  [['D5', 0, 1], ['F#5', 1, 1], ['A5', 2, 1], ['D6', 3, 5]].forEach(([n, s, l]) => mNote(t + s * d, noteHz(n, ARR.title), l * d, 'square', 0.12));
-  [['D3', 0, 8], ['A3', 0, 8]].forEach(([n, s, l]) => mNote(t + s * d, noteHz(n, ARR.title), l * d, 'triangle', 0.2));
-  mus.bus.gain.setTargetAtTime(0.1, ac.currentTime, 0.05); mus.gainT = 0.1;
+  [[62, 0, 1], [66, 1, 1], [69, 2, 1], [74, 3, 2], [73, 5, 1], [74, 6, 7]].forEach(([n, s, l]) => synth(mus.fan, t + s * d, n + 12, l * d, PATCH.brass, 0.13));
+  [62, 66, 69].forEach(n => synth(mus.fan, t, n, 13 * d, Object.assign({}, PATCH.strings, { a: 0.25, r: 0.6 }), 0.06));
+  synth(mus.fan, t, 38, 13 * d, PATCH.round, 0.2);
+  mus.duckUntil = ac.currentTime + 1.6;
 }
-// which arrangement fits right now
+// which track fits right now
+const LAND_MUSIC = { meadow: 'field', woods: 'woods', frost: 'frost', peak: 'peak' };
+function musicDefault() {
+  if (typeof titleUp !== 'undefined' && titleUp) return 'title';
+  if (state === 'story') return story.i >= 1 && story.i < 5 ? 'dark' : 'title';
+  if (state === 'ending') return ending.i <= 2 ? 'dark' : 'title';
+  if (state === 'pick') return 'town';
+  if (state === 'fly') return 'fly';
+  if (cur && cur.music) return cur.music;
+  if (cur && cur.calm) return 'home';
+  if (cur && cur.castle) return boss && boss.active && !boss.dying ? 'boss' : 'castle';
+  if (cur && cur.field && cur !== OUTMAP) return LAND_MUSIC[cur.landId] || 'field';
+  return 'town';
+}
 function musicPick() {
-  let want = 'town', tr = 0;
-  if (typeof titleUp !== 'undefined' && titleUp) want = 'title';
-  else if (state === 'story') want = story.i >= 1 && story.i < 5 ? 'dark' : 'title';
-  else if (state === 'ending') want = ending.i <= 2 ? 'dark' : 'title';
-  else if (state === 'pick') want = 'town';
-  else if (state === 'fly') want = 'fly';
-  else if (cur && cur.calm) { want = 'town'; tr = 5; }
-  else if (cur && cur.castle) want = boss && boss.active && !boss.dying ? 'boss' : 'castle';
-  else if (cur && cur.field && cur !== OUTMAP) { want = 'field'; tr = LAND_TR[cur.landId] || 0; }
+  let want = null;
+  for (const rule of MUSIC_RULES) { try { want = rule(); } catch { want = null; } if (want) break; }
+  if (!want) want = musicDefault();
+  let tr = 0; if (Array.isArray(want)) [want, tr] = want;
+  if (!TRACKS[want]) want = 'town';
   playMusic(want, tr);
 }
 // iPads and iPhones: ask for the media channel so the silent switch doesn't mute the game, and wake the sound on every touch
