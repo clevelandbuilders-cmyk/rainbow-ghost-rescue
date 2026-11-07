@@ -922,18 +922,7 @@ function buildOverworld(homeIdx) {
     flower(tx * TS + 4 + ((r() * 8) | 0), ty * TS + 4 + ((r() * 8) | 0), r() < 0.5 ? '#FF4FA0' : r() < 0.6 ? '#3DF2FF' : '#FFD23F');
   }
   // trees: trunks on the ground, canopies above everybody
-  const tree = (tx, ty, pink) => {
-    const x = tx * TS + 8, y = ty * TS + 14;
-    px(c, x - 2, y - 10, 4, 10, '#3A2433'); px(c, x + 1, y - 10, 1, 10, '#2A1826');
-    pell(c, x, y + 1, 7, 2, 'rgba(10,6,24,.45)');
-    const pal = pink ? ['#5E2152', '#9C3474', '#D85A9A', '#FF9ACB'] : ['#0F3437', '#175049', '#22735F', '#3BA07C'];
-    pell(f, x, y - 18, 15, 12, OUT);
-    pell(f, x, y - 18, 14, 11, pal[0]);
-    pell(f, x - 2, y - 21, 12, 9, pal[1]);
-    pell(f, x - 4, y - 24, 8, 6, pal[2]);
-    for (let i = 0; i < 6; i++) px(f, x - 10 + ((r() * 16) | 0), y - 28 + ((r() * 12) | 0), 2, 1, pal[3]);
-    setSolid(m, tx, ty);
-  };
+  const tree = (tx, ty, pink) => { for (let i = 0; i < 12; i++) r(); scTree(c, f, m, tx, ty, 'town', pink); }; // lush trees from the scenery pass
   for (let x = 0; x < m.w; x += 2) { tree(x, 1, (x * 7) % 5 === 0); if (x + 1 !== 23 && x + 1 !== 25) tree(x + 1, 30, (x * 3) % 7 === 0); }
   for (let y = 2; y < 30; y += 2) { if (y === 12) continue; tree(0, y, y % 6 === 0); tree(47, y, y % 8 === 0); }
   for (let y = 0; y < m.h; y++) { setSolid(m, 0, y); setSolid(m, 47, y); }
@@ -2729,6 +2718,7 @@ function buildLand(id) {
     px(c, X, Y, TS, TS, L.path[0]); if (r() < 0.5) px(c, X + ((r() * 12) | 0), Y + ((r() * 12) | 0), 3, 2, L.path[1]); if (r() < 0.4) px(c, X + ((r() * 12) | 0), Y + ((r() * 12) | 0), 2, 1, L.path[2]);
   }
   edgeTufts(c, pathSet, rng(L.seed + 999), L.blade[0], L.blade[1]);
+  if (typeof sceneGround === 'function') sceneGround(c, L, pathSet, W, H);
   for (const cs of L.castles) reserve(cs.tx - 1, cs.ty - 1, cs.tx + 7, cs.ty + 7);
   if (L.secret) reserve(...L.secret.lane);
   for (const g in (L.runes || {})) for (const [x, y] of L.runes[g]) reserve(x - 1, y - 1, x + 1, y + 2);
@@ -9043,6 +9033,342 @@ buildPick();
 showPick();
 showTitle();
 requestAnimationFrame(frame);
+// ================================================================ scenery: a richer art pass (v21)
+// Lush layered trees with leaf texture, roots, fruit, hanging vines and the odd little tree house; ground with soft
+// patches, clover, ferns, moss and pebbles; ponds with banks, shallows, lily pads and reeds; and soft light rays,
+// drifting mist and glowing pollen drawn on top. Everything here only paints: it never changes what is solid, and
+// it uses its own random numbers so every land keeps exactly the same layout as before.
+function scPal() { return {
+  green: [['#123A26', '#1B5A33', '#287A40', '#3E9E4E', '#7FD46A'], ['#143F2B', '#1F6238', '#2E8746', '#4BAE58', '#9BE07A']],
+  pink: [['#4A1844', '#7A2463', '#A83A80', '#D8609F', '#FFA6D2']],
+  dark: [['#08262A', '#10403C', '#195C4C', '#2A8466', '#5CC896'], ['#0C1E36', '#15345A', '#1F4E78', '#2E6E9A', '#62B4E0'], ['#0E2A22', '#17452E', '#226438', '#35884A', '#78C86A']],
+  town: [['#0B2E30', '#124640', '#1B6655', '#2C8C70', '#62C49A']],
+}; }
+function scRng(a, b, s) { return rng((a * 73856093) ^ (b * 19349663) ^ (s || 0)); }
+function scCanopy(f, q, x, y, s, pal) {
+  // a canopy made of overlapping clumps: one outline around the whole shape, then each clump shaded back to front
+  // with a dark underside, a lit top left, leaf texture and a few bright leaf tips
+  const cl = [[0, -3, 12, 8], [-8, 1, 7, 6], [8, 1, 7, 6], [-4, -8, 8, 6], [5, -8, 7, 5], [-3, 3, 8, 5], [4, 3, 8, 5], [0, -12, 6, 4]]
+    .map(([dx, dy, rx, ry]) => [x + dx * s + (q() - 0.5) * 2, y + dy * s + (q() - 0.5) * 2, rx * s * (0.9 + q() * 0.2), ry * s * (0.9 + q() * 0.2)]);
+  for (const [cx, cy, rx, ry] of cl) pell(f, cx, cy, rx + 1, ry + 1, OUT);
+  for (const [cx, cy, rx, ry] of cl) {
+    pell(f, cx, cy, rx, ry, pal[0]);
+    pell(f, cx - 0.5, cy - 1.5, rx - 0.5, ry - 1.2, pal[1]);
+    pell(f, cx - rx * 0.2, cy - ry * 0.35, rx * 0.68, ry * 0.55, pal[2]);
+    pell(f, cx - rx * 0.32, cy - ry * 0.5, rx * 0.36, ry * 0.3, pal[3]);
+    for (let i = 0; i < rx * ry * 0.12; i++) {
+      const a = q() * Math.PI * 2, d = Math.sqrt(q()) * 0.85, lx = Math.round(cx + Math.cos(a) * d * rx), ly = Math.round(cy + Math.sin(a) * d * ry);
+      if (ly < cy - ry * 0.15) { px(f, lx, ly, 1, 1, pal[3]); px(f, lx + 1, ly - 1, 1, 1, pal[q() < 0.35 ? 4 : 3]); }
+      else { px(f, lx, ly, 1, 1, pal[0]); px(f, lx - 1, ly - 1, 1, 1, pal[0]); }
+    }
+  }
+}
+const _scDrawTree = drawTree;
+drawTree = function (c, f, m, tx, ty, style, r) {
+  if (style !== 'green' && style !== 'dark') return _scDrawTree(c, f, m, tx, ty, style, r);
+  // use up the same random numbers the old tree did, so nothing else in the land moves
+  const pink = style === 'green' ? r() < 0.25 : r() < 0.35;
+  for (let i = 0; i < 12; i++) r();
+  scTree(c, f, m, tx, ty, style, pink);
+};
+function scTree(c, f, m, tx, ty, style, pink) {
+  const SC = scPal(), q = scRng(tx, ty, style === 'dark' ? 7 : 3), x = tx * TS + 8, y = ty * TS + 14;
+  const big = q() < (style === 'dark' ? 0.22 : 0.14), s = big ? 1.3 : 0.95 + q() * 0.15;
+  const pal = pink && (style === 'town' || q() < 0.75) ? SC.pink[0] : SC[style][(q() * SC[style].length) | 0];
+  const bark = style === 'dark' ? ['#1E1226', '#33203A', '#4A3150', '#5E8C5A'] : ['#2A1622', '#4A2A30', '#6B4038', '#5BAA55'];
+  // ground: a soft shadow and roots
+  pell(c, x, y + 1, 11 * s, 3, 'rgba(8,4,20,.45)');
+  pell(c, x + 2, y - 1, 15 * s, 6 * s, 'rgba(8,4,20,.18)');
+  px(c, x - 5, y - 1, 3, 2, bark[0]); px(c, x - 6, y, 2, 1, bark[1]); px(c, x + 3, y - 1, 3, 2, bark[0]); px(c, x + 5, y, 2, 1, bark[1]);
+  // trunk with bark lines and a lit side
+  const tw = big ? 6 : 4, th = big ? 13 : 11;
+  px(c, x - tw / 2 - 1, y - th, tw + 2, th, OUT);
+  px(c, x - tw / 2, y - th, tw, th, bark[1]);
+  px(c, x - tw / 2, y - th, 1, th, bark[2]);
+  px(c, x + tw / 2 - 1, y - th, 1, th, bark[0]);
+  for (let i = 0; i < 3; i++) px(c, x - tw / 2 + 1 + ((q() * (tw - 1)) | 0), y - th + 2 + ((q() * (th - 4)) | 0), 1, 2, bark[0]);
+  if (style === 'dark') { px(c, x - tw / 2, y - 4, 2, 2, bark[3]); px(c, x + 1, y - 7, 1, 2, bark[3]); }
+  // a little tree house door and window in some of the big woods trees
+  if (big && style === 'dark' && q() < 0.55) {
+    px(c, x - 2, y - 6, 4, 6, OUT); px(c, x - 1, y - 5, 2, 5, '#FFB347'); px(c, x - 1, y - 5, 2, 1, '#FFE08A');
+    m.lights.push({ x, y: y - 3, r: 14, col: '#FFB347', a: 0.6, fl: 1 });
+  }
+  // canopy: several clumps, back to front
+  const cy0 = y - th - 6 * s;
+  scCanopy(f, q, x, cy0, s, pal);
+  // fruit or blossoms in the meadow trees, hanging vines in the woods
+  if (style === 'green' && q() < 0.45) {
+    const col = pink ? '#FFFFFF' : q() < 0.5 ? '#FF9F1C' : '#FF4FA0';
+    for (let i = 0; i < 5; i++) { const fx = Math.round(x + (q() - 0.5) * 18 * s), fy = Math.round(cy0 + (q() - 0.4) * 12 * s); px(f, fx, fy, 2, 2, col); px(f, fx, fy, 1, 1, '#FFF6D0'); }
+  }
+  if (style === 'dark') {
+    const n = 2 + ((q() * 4) | 0);
+    for (let i = 0; i < n; i++) {
+      const vx = Math.round(x + (q() - 0.5) * 20 * s), top = Math.round(cy0 + 5 * s + q() * 3), len = 4 + ((q() * 9) | 0);
+      for (let k = 0; k < len; k++) { px(f, vx + (k % 4 === 3 ? 1 : 0), top + k, 1, 1, k % 3 ? '#2F8C6E' : '#47C08F'); if (k % 3 === 1) px(f, vx - 1, top + k, 1, 1, '#1F6A56'); }
+      if (q() < 0.4) { px(f, vx - 1, top + len, 3, 2, '#C77DFF'); m.lights.push({ x: vx, y: top + len, r: 7, col: '#C77DFF', a: 0.5, fl: 2 }); }
+    }
+  }
+  setSolid(m, tx, ty);
+}
+
+// ---------------------------------------------------------------- ground detail, painted right after the paths
+function sceneGround(c, L, pathSet, W, H) {
+  const q = rng(L.seed * 31 + 5), id = Object.keys(LANDS).find(k => LANDS[k] === L);
+  if (id === 'frost' || id === 'peak') return sceneGroundCold(c, L, pathSet, W, H, q, id);
+  const light = mixHex(L.ground[0], L.blade[1], 0.22), lighter = mixHex(L.ground[0], L.blade[1], 0.38), dark = mixHex(L.ground[0], '#05030C', 0.25);
+  const onPath = (x, y) => pathSet.has(Math.floor(x / TS) + ',' + Math.floor(y / TS));
+  // big soft patches of lighter and darker grass, dithered at the edges so they melt in
+  for (let i = 0; i < W * H / 26; i++) {
+    const cx = q() * W * TS, cy = q() * H * TS, rx = 14 + q() * 34, ry = rx * (0.5 + q() * 0.3), lit = q() < 0.6;
+    for (let yy = -ry; yy <= ry; yy += 1) for (let xx = -rx; xx <= rx; xx += 1) {
+      const d = (xx * xx) / (rx * rx) + (yy * yy) / (ry * ry); if (d > 1) continue;
+      const X = Math.round(cx + xx), Y = Math.round(cy + yy);
+      if (d > 0.55 && (X + Y) % 2) continue; if (d > 0.82 && (X % 2 || Y % 2)) continue;
+      if (onPath(X, Y)) continue;
+      if (q() < 0.55) px(c, X, Y, 1, 1, lit ? (d < 0.3 && q() < 0.3 ? lighter : light) : dark);
+    }
+  }
+  // clover, little ferns, grass clumps and fallen petals
+  for (let i = 0; i < W * H * 0.55; i++) {
+    const X = (q() * W * TS) | 0, Y = (q() * H * TS) | 0; if (onPath(X, Y)) continue;
+    const v = q();
+    if (v < 0.4) { px(c, X, Y, 1, 3, L.blade[0]); px(c, X - 1, Y + 1, 1, 2, L.blade[0]); px(c, X + 1, Y + 1, 1, 2, L.blade[1]); px(c, X, Y, 1, 1, L.blade[1]); }
+    else if (v < 0.6) { px(c, X, Y, 2, 2, L.blade[0]); px(c, X + 2, Y + 1, 2, 2, L.blade[0]); px(c, X + 1, Y + 2, 2, 2, L.blade[1]); px(c, X + 1, Y + 1, 1, 1, lighter); }
+    else if (v < 0.75 && id === 'woods') { for (let k = 0; k < 4; k++) { px(c, X - k, Y + k, 1, 1, '#2F7C6B'); px(c, X + k, Y + k, 1, 1, '#2F7C6B'); px(c, X, Y + k, 1, 1, '#47A383'); } }
+    else if (v < 0.75) { px(c, X, Y, 1, 1, L.flowers[(q() * L.flowers.length) | 0]); }
+    else if (v < 0.83) { px(c, X, Y, 2, 1, mixHex(L.ground[0], '#FFFFFF', 0.18)); px(c, X, Y + 1, 2, 1, dark); }
+  }
+  // little scenes: red toadstools, flower clumps, mossy stones and stumps
+  const spot = () => { for (let t = 0; t < 20; t++) { const X = 2 * TS + q() * (W - 4) * TS, Y = 2 * TS + q() * (H - 4) * TS; if (!onPath(X, Y) && !onPath(X + 10, Y) && !onPath(X - 10, Y)) return [X | 0, Y | 0]; } return null; };
+  for (let i = 0; i < W * H / (id === 'woods' ? 40 : 60); i++) { const p = spot(); if (p) scToadstools(c, q, p[0], p[1], 1 + ((q() * 3) | 0)); }
+  for (let i = 0; i < W * H / 45; i++) { const p = spot(); if (p) scFlowerClump(c, q, p[0], p[1], L.flowers, L.blade); }
+  for (let i = 0; i < W * H / 120; i++) { const p = spot(); if (p) (q() < 0.5 ? scStone : scStump)(c, q, p[0], p[1], L); }
+  // pebbles and soft edges along the paths
+  for (const k of pathSet) {
+    const [tx, ty] = k.split(',').map(Number), X = tx * TS, Y = ty * TS;
+    for (let i = 0; i < 3; i++) if (q() < 0.6) { const sx = X + ((q() * 14) | 0), sy = Y + ((q() * 14) | 0); px(c, sx, sy + 1, 2, 1, mixHex(L.path[0], '#05030C', 0.35)); px(c, sx, sy, 2, 1, mixHex(L.path[2], '#FFFFFF', 0.25)); }
+    if (q() < 0.25) px(c, X + ((q() * 12) | 0), Y + ((q() * 12) | 0), 4, 1, mixHex(L.path[0], '#05030C', 0.2));
+  }
+}
+function scToadstools(c, q, x, y, n) {
+  for (let k = 0; k < n; k++) {
+    const sx = x + k * 5 - n * 2, sy = y + (k % 2) * 3, big = q() < 0.4 ? 1 : 0, w = 3 + big;
+    pell(c, sx, sy + 1, w, 1.2, 'rgba(8,4,20,.4)');
+    px(c, sx - 1, sy - 3 - big, 2, 4 + big, '#F2E6D8'); px(c, sx, sy - 3 - big, 1, 4 + big, '#C8B8A8');
+    pell(c, sx, sy - 4 - big * 2, w + 1, 2.6 + big * 0.6, OUT); pell(c, sx, sy - 4.5 - big * 2, w, 2.2 + big * 0.6, '#E8413A'); px(c, sx - w + 1, sy - 6 - big * 2, w, 1, '#FF7A5C');
+    px(c, sx - 1, sy - 5 - big * 2, 1, 1, '#FFFFFF'); px(c, sx + 1, sy - 4 - big * 2, 1, 1, '#FFFFFF'); if (big) px(c, sx - 3, sy - 4 - big * 2, 1, 1, '#FFFFFF');
+  }
+}
+function scFlowerClump(c, q, x, y, cols, blade) {
+  const col = cols[(q() * cols.length) | 0];
+  for (let k = 0; k < 6; k++) { const lx = x + ((q() - 0.5) * 10) | 0, ly = y + ((q() - 0.5) * 5) | 0; px(c, lx, ly, 1, 3, blade[0]); px(c, lx - 1, ly + 1, 1, 1, blade[1]); }
+  for (let k = 0; k < 4 + ((q() * 3) | 0); k++) { const fx = x + ((q() - 0.5) * 10) | 0, fy = y - 2 + ((q() - 0.5) * 5) | 0; px(c, fx - 1, fy, 3, 1, col); px(c, fx, fy - 1, 1, 3, col); px(c, fx, fy, 1, 1, '#FFF6A0'); }
+}
+function scStone(c, q, x, y, L) {
+  const col = mixHex(L.ground[0], '#8A90B0', 0.55);
+  pell(c, x + 1, y + 2, 6, 2, 'rgba(8,4,20,.4)'); pell(c, x, y, 5.5, 3.5, OUT); pell(c, x, y - 0.5, 4.5, 2.6, col); pell(c, x - 1, y - 1.5, 2.5, 1.2, mixHex(col, '#FFFFFF', 0.3));
+  px(c, x - 3, y - 3, 4, 1, L.blade[0]); px(c, x - 2, y - 3, 2, 1, L.blade[1]);
+}
+function scStump(c, q, x, y) {
+  pell(c, x + 1, y + 2, 6, 2, 'rgba(8,4,20,.4)'); px(c, x - 4, y - 4, 9, 6, OUT); px(c, x - 3, y - 3, 7, 5, '#5A3426'); px(c, x - 3, y - 3, 2, 5, '#7A4A34');
+  pell(c, x + 0.5, y - 4, 4.5, 1.8, OUT); pell(c, x + 0.5, y - 4, 3.5, 1.2, '#C89A6A'); px(c, x, y - 4, 2, 1, '#9A6A44');
+  px(c, x - 5, y + 1, 2, 1, '#5A3426'); px(c, x + 5, y + 1, 2, 1, '#5A3426');
+}
+function sceneGroundCold(c, L, pathSet, W, H, q, id) {
+  const onPath = (x, y) => pathSet.has(Math.floor(x / TS) + ',' + Math.floor(y / TS));
+  const hi = id === 'frost' ? '#EAF4FF' : '#5E4790', lo = id === 'frost' ? '#96AED6' : '#2A1D46';
+  for (let i = 0; i < W * H / 30; i++) {
+    const cx = q() * W * TS, cy = q() * H * TS, rx = 12 + q() * 30, ry = rx * 0.45, lit = q() < 0.6;
+    for (let yy = -ry; yy <= ry; yy++) for (let xx = -rx; xx <= rx; xx++) {
+      const d = (xx * xx) / (rx * rx) + (yy * yy) / (ry * ry), X = Math.round(cx + xx), Y = Math.round(cy + yy);
+      if (d > 1 || d > 0.6 && (X + Y) % 2 || onPath(X, Y)) continue;
+      if (q() < 0.5) px(c, X, Y, 1, 1, lit ? hi : lo);
+    }
+  }
+  for (let i = 0; i < W * H * 0.25; i++) {
+    const X = (q() * W * TS) | 0, Y = (q() * H * TS) | 0; if (onPath(X, Y)) continue;
+    if (id === 'frost') { px(c, X, Y, 1, 1, '#FFFFFF'); if (q() < 0.3) { px(c, X - 1, Y, 3, 1, '#FFFFFF'); px(c, X, Y - 1, 1, 3, '#FFFFFF'); } }
+    else { px(c, X, Y, 1, 1, RAINBOW[(q() * 6) | 0]); px(c, X + 1, Y + 1, 1, 1, lo); }
+  }
+}
+
+// ---------------------------------------------------------------- ponds: banks, shallows, lily pads and reeds
+const SC_WATER = {
+  meadow: { deep: '#14306E', mid: '#1C4C8C', shal: '#2B78A8', foam: '#9EE8FF', bank: '#1E3A26', bankL: '#3C5A36', stone: '#7E8AA6', pads: true, reeds: '#4E9A4A', glow: '#5FD8FF' },
+  woods: { deep: '#0A2A3A', mid: '#0F4450', shal: '#16706E', foam: '#7FFFE0', bank: '#122420', bankL: '#24403A', stone: '#4E5A78', pads: true, reeds: '#2F7C6B', glow: '#3DF2C8' },
+  frost: null, peak: null,
+};
+function sceneIce(m) {
+  const c = m.bg.getContext('2d'), q = scRng(m.w, m.h, 77);
+  for (const [tx, ty] of m.water) {
+    const X = tx * TS, Y = ty * TS;
+    for (let i = 0; i < 3; i++) { const sx = X + ((q() * 14) | 0), sy = Y + ((q() * 14) | 0); for (let k = 0; k < 5; k++) px(c, sx + k, sy - k, 1, 1, '#3A74C8'); }
+    if (q() < 0.25) { let cx2 = X + 8, cy2 = Y + 8; for (let k = 0; k < 9; k++) { px(c, cx2, cy2, 1, 1, '#A8D8FF'); cx2 += q() < 0.5 ? 1 : -1; cy2 += q() < 0.6 ? 1 : 0; } }
+    if (q() < 0.12) { px(c, X + 4, Y + 6, 6, 1, '#DDF2FF'); px(c, X + 6, Y + 5, 2, 1, '#FFFFFF'); }
+  }
+}
+function sceneWater(m, id) {
+  if (id === 'frost') return sceneIce(m);
+  const P = SC_WATER[id], L = LANDS[id]; if (!P || !L.ponds) return;
+  const c = m.bg.getContext('2d'), q = scRng(m.w, m.h, 99 + id.length);
+  m.scPonds = [];
+  for (const [x0, y0, x1, y1] of L.ponds) {
+    const X0 = x0 * TS, Y0 = y0 * TS, X1 = (x1 + 1) * TS, Y1 = (y1 + 1) * TS, R = 14;
+    // signed distance to a rounded rectangle: > 0 inside the water
+    const sd = (x, y) => { const cx = Math.min(Math.max(x, X0 + R), X1 - R), cy = Math.min(Math.max(y, Y0 + R), Y1 - R); const inner = Math.min(x - X0, X1 - x, y - Y0, Y1 - y); const dx = x - cx, dy = y - cy; return (x < X0 + R || x > X1 - R) && (y < Y0 + R || y > Y1 - R) ? R - Math.hypot(dx, dy) : inner; };
+    const wob = (x, y) => 1.6 * Math.sin(x * 0.21 + y * 0.07) + 1.1 * Math.sin(y * 0.29 + x * 0.05 + 2);
+    for (let y = Y0 - 4; y < Y1 + 4; y++) for (let x = X0 - 4; x < X1 + 4; x++) {
+      const d = sd(x + 0.5, y + 0.5) - 2.6 + wob(x, y), dit = (x + y) % 2;
+      let col = null;
+      if (d <= -2) { if (x >= X0 && x < X1 && y >= Y0 && y < Y1) px(c, x, y, 1, 1, (x * 7 + y * 13) % 11 === 0 ? L.blade[0] : (x * 5 + y * 3) % 7 === 0 ? L.ground[1] : L.ground[0]); continue; }
+      else if (d <= 0) col = d > -1 ? P.bankL : P.bank;
+      else if (d < 1.2) col = P.foam;
+      else if (d < 4) col = P.shal;
+      else if (d < 5) col = dit ? P.shal : P.mid;
+      else if (d < 10) col = P.mid;
+      else if (d < 11.5) col = dit ? P.mid : P.deep;
+      else col = P.deep;
+      if (col) px(c, x, y, 1, 1, col);
+    }
+    // round stones along the bank
+    for (let i = 0; i < (x1 - x0 + y1 - y0) * 1.6; i++) {
+      const t = q(), side = (q() * 4) | 0;
+      let sx = side < 2 ? X0 + 6 + t * (X1 - X0 - 12) : side === 2 ? X0 + 1 : X1 - 2, sy = side === 0 ? Y0 + 1 : side === 1 ? Y1 - 2 : Y0 + 8 + t * (Y1 - Y0 - 16);
+      sx |= 0; sy |= 0; const w = 2 + ((q() * 3) | 0);
+      pell(c, sx, sy + 1, w + 1, 2, OUT); pell(c, sx, sy, w, 1.6, P.stone); px(c, sx - 1, sy - 1, 2, 1, mixHex(P.stone, '#FFFFFF', 0.35)); if (q() < 0.4) px(c, sx, sy - 1, 2, 1, LANDS[id].blade[0]);
+    }
+    // grass lip hanging over the far bank, ripples, reeds and lily pads
+    for (let x = X0 + 4; x < X1 - 4; x++) if (q() < 0.5) px(c, x, Y0 - 2 - ((q() * 2) | 0), 1, 2, L.blade[q() < 0.5 ? 0 : 1]);
+    for (let i = 0; i < (x1 - x0 + 1) * (y1 - y0 + 1) * 0.8; i++) { const rx = X0 + 8 + q() * (X1 - X0 - 20), ry = Y0 + 8 + q() * (Y1 - Y0 - 14); px(c, rx | 0, ry | 0, 3 + ((q() * 3) | 0), 1, P.shal); }
+    for (let i = 0; i < (x1 - x0 + y1 - y0) * 1.2; i++) {
+      const side = q(), t = q();
+      const rx = side < 0.5 ? X0 + 4 + t * (X1 - X0 - 8) : (q() < 0.5 ? X0 + 3 : X1 - 6), ry = side < 0.5 ? (q() < 0.4 ? Y0 + 5 : Y1 - 2) : Y0 + 8 + t * (Y1 - Y0 - 10);
+      if (q() < 0.5) continue;
+      for (let k = 0; k < 3; k++) px(c, (rx | 0) + k * 2, (ry | 0) - 5 - (k % 2) * 2, 1, 5 + (k % 2) * 2, k === 1 ? mixHex(P.reeds, '#FFFFFF', 0.2) : P.reeds);
+      if (q() < 0.5) px(c, (rx | 0) + 2, (ry | 0) - 9, 1, 3, '#7A4A2A');
+    }
+    if (P.pads) for (let i = 0; i < (x1 - x0 + 1) * (y1 - y0 + 1) * 0.35; i++) {
+      const lx = Math.round(X0 + 8 + q() * (X1 - X0 - 16)), ly = Math.round(Y0 + 7 + q() * (Y1 - Y0 - 13));
+      if (sd(lx, ly) < 5) continue;
+      pell(c, lx, ly + 1, 4, 2.5, P.deep); pell(c, lx, ly, 3.5, 2.5, '#2E8746'); pell(c, lx - 1, ly - 0.5, 2, 1.2, '#5BC46A'); px(c, lx + 1, ly - 2, 1, 2, P.mid); px(c, lx + 2, ly - 1, 1, 1, P.mid);
+      if (q() < 0.4) { const fc = q() < 0.6 ? '#FF9ACB' : '#FFFFFF'; px(c, lx - 1, ly - 2, 3, 2, fc); px(c, lx, ly - 3, 1, 1, fc); px(c, lx, ly - 2, 1, 1, '#FFF6A0'); m.lights.push({ x: lx, y: ly - 2, r: 8, col: fc, a: 0.45, fl: 2 }); }
+    }
+    m.scPonds.push({ x: X0, y: Y0, w: X1 - X0, h: Y1 - Y0, col: P.glow });
+  }
+}
+const _scBuildLand = buildLand;
+buildLand = function (id) { const m = _scBuildLand(id); try { sceneWater(m, id); m.scAtmos = id; } catch (e) { console.warn(e); } return m; };
+
+// ---------------------------------------------------------------- light rays, mist and pollen, drawn over everything
+const SC_ATMOS = {
+  meadow: { rays: '#FFE9A8', ray: 0.16, mist: '#CFEFFF', pollen: '#FFF3A0' },
+  woods: { rays: '#9FFFE0', ray: 0.15, mist: '#7FD8C8', pollen: '#B9FF6B' },
+  frost: { rays: '#DDEBFF', ray: 0.07, mist: '#FFFFFF', pollen: '#FFFFFF' },
+  peak: { rays: '#E0B8FF', ray: 0.07, mist: '#C77DFF', pollen: '#FFB8F0' },
+  town: { rays: '#FFD8A8', ray: 0.05, mist: null, pollen: '#FFE9A8' },
+  cove: { rays: '#FFE0B8', ray: 0.06, mist: '#BDF4FF', pollen: '#FFFFFF' },
+  hollow: { rays: '#B8FFE8', ray: 0.08, mist: '#9FE8D8', pollen: '#B9FF6B' },
+  village: { rays: '#FFE9A8', ray: 0.08, mist: null, pollen: '#B9FF6B' },
+};
+let scRay = null;
+function scRayImg() {
+  if (scRay) return scRay;
+  const w = 34, h = 240, cv = mk(w + h * 0.45, h), x = cv.getContext('2d');
+  for (let y = 0; y < h; y++) {
+    const t = y / h, a = Math.sin(Math.PI * Math.min(1, t * 1.25)) * (1 - t * 0.6);
+    for (let i = 0; i < w; i++) { const e = Math.sin(Math.PI * i / w); x.fillStyle = `rgba(255,255,255,${(a * e * 0.9).toFixed(3)})`; x.fillRect(Math.round(i + y * 0.45), y, 1, 1); }
+  }
+  return (scRay = cv);
+}
+const scTint = {};
+function scTinted(col) {
+  if (scTint[col]) return scTint[col];
+  const src = scRayImg(), cv = mk(src.width, src.height), x = cv.getContext('2d');
+  x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+  return (scTint[col] = cv);
+}
+function sceneAtmos(cx, cy) {
+  const m = cur, key = m.scAtmos || m.town || (m === OUTMAP ? 'town' : m.village ? 'village' : null), A = key && SC_ATMOS[key];
+  if (!A || m.castle) return;
+  ctx.globalCompositeOperation = 'lighter';
+  // slanted sun rays, fixed in the world so they feel like gaps in the leaves
+  const img = scTinted(A.rays);
+  if (!m.scRays) { const q = scRng(m.w, m.h, 5), n = Math.round(m.w * m.h * TS * TS / 26000); m.scRays = []; for (let i = 0; i < n; i++) m.scRays.push({ x: q() * m.w * TS - 60, y: q() * m.h * TS - 160, k: q() < 0.3 ? 1.5 : 1, p: q() * 6 }); }
+  for (const R of m.scRays) {
+    const x = R.x - cx, y = R.y - cy; if (x > VW + 10 || x + img.width * R.k < -10 || y > VH || y + img.height < 0) continue;
+    ctx.globalAlpha = A.ray * (0.5 + 0.5 * Math.sin(clock * 0.45 + R.p));
+    ctx.drawImage(img, Math.round(x), Math.round(y), Math.round(img.width * R.k), img.height);
+  }
+  // mist drifting over the water
+  if (A.mist) for (const p of m.scPonds || []) {
+    if (p.x - cx > VW + 40 || p.x + p.w - cx < -40 || p.y - cy > VH + 30 || p.y + p.h - cy < -30) continue;
+    const n = Math.max(2, Math.round(p.w / 22));
+    for (let i = 0; i < n; i++) {
+      const t = clock * 0.15 + i * 0.37, mx = p.x + ((i / n + t * 0.1) % 1) * p.w, my = p.y + p.h * (0.25 + 0.5 * ((i * 0.618) % 1)) + Math.sin(t * 2) * 3;
+      ctx.globalAlpha = 0.13 + 0.06 * Math.sin(t * 3 + i);
+      const g = glow(A.mist, 26); ctx.drawImage(g, Math.round(mx - cx - 30), Math.round(my - cy - 12), 60, 24);
+    }
+    ctx.globalAlpha = 0.12 + 0.05 * Math.sin(clock * 1.3); ctx.drawImage(glow(p.col, 30), Math.round(p.x + p.w / 2 - cx - p.w / 2 - 8), Math.round(p.y + p.h / 2 - cy - p.h / 2 - 8), p.w + 16, p.h + 16);
+  }
+  // pollen floating in the light rays
+  ctx.fillStyle = A.pollen;
+  for (let i = 0; i < 26; i++) {
+    const s = i * 37.7, x = ((s * 13 + clock * (6 + i % 5)) % (VW + 20)) - 10, y = ((s * 7 + Math.sin(clock * 0.7 + i) * 14 + clock * 3) % (VH + 20)) - 10;
+    ctx.globalAlpha = 0.25 + 0.35 * Math.max(0, Math.sin(clock * 1.5 + i * 2.1));
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+const _scAdvLights = adventureLights;
+adventureLights = function (cx, cy) { _scAdvLights(cx, cy); try { sceneAtmos(cx, cy); } catch (e) { console.warn(e); } };
+
+// ---------------------------------------------------------------- castles: stone texture, climbing ivy, banners and glowing windows
+const _scDrawCastle = drawCastle;
+drawCastle = function (c, f, m, cs) {
+  _scDrawCastle(c, f, m, cs);
+  try {
+    const def = ghostDef(cs.gid), x = cs.tx * TS, y = cs.ty * TS, q = scRng(cs.tx, cs.ty, 41);
+    const ivy = ['#1F6A3A', '#2E8C4A', '#5BC46A'];
+    // weathered stones
+    const wall = mixHex(def.color, '#4B4470', 0.5);
+    for (let i = 0; i < 34; i++) { const sx = x + 8 + ((q() * 96) | 0), sy = y + 42 + ((q() * 50) | 0); px(c, sx, sy, 4, 1, mixHex(wall, '#FFFFFF', 0.12)); px(c, sx, sy + 1, 4, 1, mixHex(wall, '#140C24', 0.25)); }
+    // ivy climbing the towers and walls
+    for (const vx of [x + 3, x + 24, x + 87, x + 108, x + 40, x + 70]) {
+      const len = 18 + ((q() * 30) | 0), base = y + 95;
+      for (let k = 0; k < len; k++) { const wx = vx + Math.round(Math.sin(k * 0.45 + vx) * 1.5); px(c, wx, base - k, 1, 1, ivy[k % 2]); if (k % 4 === 0) { px(c, wx - 1, base - k, 1, 1, ivy[2]); px(c, wx + 1, base - k - 1, 1, 1, ivy[0]); } }
+      if (q() < 0.6) { const fy = base - len + 4; px(c, vx - 1, fy, 2, 2, '#FF9ACB'); }
+    }
+    // little arched windows with warm light
+    for (const [wx, wy] of [[x + 20, y + 60], [x + 46, y + 56], [x + 62, y + 56], [x + 88, y + 60]]) {
+      px(c, wx - 1, wy - 1, 6, 9, OUT); px(c, wx, wy, 4, 7, '#FFD27A'); px(c, wx + 1, wy - 1, 2, 1, OUT); px(c, wx, wy, 4, 2, '#FFF2C0'); px(c, wx + 1, wy + 3, 2, 1, '#E8A040');
+      m.lights.push({ x: wx + 2, y: wy + 3, r: 12, col: '#FFC870', a: 0.45, fl: 1 });
+    }
+    // banners in the ghost's colour beside the door
+    for (const bx of [x + 36, x + 72]) {
+      px(c, bx - 1, y + 66, 8, 1, OUT); px(c, bx, y + 67, 6, 14, def.color); px(c, bx, y + 67, 6, 2, mixHex(def.color, '#FFFFFF', 0.4));
+      px(c, bx, y + 81, 2, 2, def.color); px(c, bx + 4, y + 81, 2, 2, def.color); px(c, bx + 2, y + 72, 2, 3, '#FFFFFF');
+    }
+    // a little lit lane of stones up to the door
+    for (let k = 0; k < 3; k++) { const sx = (cs.tx + 3) * TS + 1, sy = (cs.ty + 6) * TS + 2 + k * 5; px(c, sx, sy, 14, 3, '#5A5280'); px(c, sx, sy, 14, 1, '#8A84B0'); }
+  } catch (e) { console.warn(e); }
+};
+
+// ---------------------------------------------------------------- leafier bushes (same size, so hitting them works as before)
+(function scBushes() {
+  const make = (secret) => {
+    const p = new PB(18, 18), q = rng(secret ? 17 : 9);
+    p.ell(9, 10.5, 8, 6.5, '#123F3A'); p.ell(5, 9, 4.5, 4, '#123F3A'); p.ell(13, 9, 4.5, 4, '#123F3A'); p.ell(9, 6, 5, 4, '#123F3A');
+    p.ell(9, 10, 7, 5.5, '#1C5F55'); p.ell(5, 8.5, 3.6, 3.2, '#1F6A58'); p.ell(13, 8.5, 3.6, 3.2, '#1F6A58'); p.ell(9, 5.5, 4, 3, '#22735F');
+    p.ell(7, 7, 3, 2, '#2E8C6E'); p.ell(11.5, 5, 2, 1.4, '#2E8C6E'); p.ell(4.5, 7.5, 1.6, 1.2, '#3BA07C');
+    for (let i = 0; i < 14; i++) { const x = 2 + ((q() * 14) | 0), y = 3 + ((q() * 12) | 0); p.set(x, y, y < 8 ? '#5CC896' : '#0E3330'); }
+    if (secret) { [[6, 6], [12, 10], [9, 3], [4, 11]].forEach(([x, y]) => p.set(x, y, '#FFE45C')); p.set(9, 2, '#FFFFFF'); }
+    else { [[5, 7], [13, 9], [8, 12]].forEach(([x, y], i) => { const col = ['#FF4FA0', '#FFD23F', '#FF4FA0'][i]; p.set(x, y, col); p.set(x + 1, y, col); }); p.set(5, 6, '#FFFFFF'); }
+    return p.outline().canvas();
+  };
+  try { SPR2.bush = make(false); SPR2.bushSecret = make(true); } catch (e) { console.warn(e); }
+})();
+
 window.__g = { get state() { return state; }, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
 </script>
 <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script></body></html>
