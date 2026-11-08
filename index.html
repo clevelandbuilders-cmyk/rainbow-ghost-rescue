@@ -14013,6 +14013,52 @@ if (typeof TROPHIES !== 'undefined') TROPHIES.push(
 }
 window.__bsm = { bsmBuildBasement, get herbs() { return bsmHerbs; }, get pots() { return bsmPots; }, fx: bsmFx, drink: bsmDrink, openLab: bsmOpenLab, give(k, n = 5) { if (BSM_HERBS[k]) { bsmHerbs[k] = (bsmHerbs[k] || 0) + n; bsmSave(); } } };
 
+// ================================================================ v24: running out of hearts drops a coin bag (Easy and Tricky, everywhere)
+// A quarter of your coins (at most 50) fall into a bag where you ran out of hearts. Walk back to get them all back.
+// Run out of hearts again before you get there and that bag is gone. Names use the tlb prefix.
+let tlbBag = store.get('tlbBag', null);
+const tlbKey = (m) => !m ? '' : m === OUTMAP ? 'town' : (typeof INMAP !== 'undefined' && m === INMAP) ? 'house' : m.castle ? 'castle:' + m.castle : (m.landId || '');
+const TLB_IMG = (() => { const p = new PB(14, 14), G = '#E0A82E', D = '#A8761E';
+  p.ell(7, 9, 6, 4.6, G); p.rect(4, 3, 6, 3, G); p.rect(3, 5, 8, 1, '#7A4A2E'); p.ell(7, 2, 3, 1.4, D);
+  p.ell(9, 10.5, 3, 2, D); p.set(4, 8, '#FFE45C'); p.set(5, 7, '#FFE45C'); p.ell(7, 10, 1.6, 1.6, '#FFE45C'); p.set(7, 10, '#C88A1E');
+  return p.outline().canvas(); })();
+function tlbDrop() {
+  if (!heroDef || coins <= 0) return;
+  const n = Math.min(50, Math.max(1, Math.ceil(coins * 0.25))), lost = tlbBag;
+  coins -= n; store.set('coins', coins); drawCoins();
+  tlbBag = { key: tlbKey(cur), x: hero.x, y: hero.y, n };
+  store.set('tlbBag', tlbBag);
+  setTimeout(() => hmSay(`Oh no! You dropped ${n} coin${n > 1 ? 's' : ''}${lost ? ', and your last coin bag is gone' : ''}! Go back to where you fell and grab your coin bag.`), 900);
+}
+function tlbUpdate() {
+  const B = tlbBag; if (!B || state !== 'play' || B.key !== tlbKey(cur) || hero.inv > 1) return;
+  const d = Math.hypot(hero.x - B.x, hero.y - B.y);
+  if (d > 40) B.armed = true; // you have to walk away and come back for it
+  if (d > 12 || !B.armed) return;
+  coins += B.n; store.set('coins', coins); drawCoins(); tlbBag = null; store.set('tlbBag', null);
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, 'square', 0.05, null, i * 0.07));
+  for (let i = 0; i < 14; i++) poofs.push({ x: B.x, y: B.y - 6, vx: rand(-50, 50), vy: rand(-90, -20), life: 0.7, col: i % 2 ? '#FFE45C' : '#FFFFFF' });
+  toast(`You got your coin bag back! +${B.n} coins`);
+}
+{
+  const _qr = questRespawn;
+  questRespawn = function (...a) { try { tlbDrop(); } catch (e) { console.warn(e); } return _qr(...a); };
+  const _ua = updateAdventure;
+  updateAdventure = function (dt, ...a) { const r = _ua(dt, ...a); try { tlbUpdate(); } catch (e) { console.warn(e); } return r; };
+  const _ad = adventureDrawables;
+  adventureDrawables = function (list) {
+    _ad(list);
+    try {
+      const B = tlbBag;
+      if (B && B.key === tlbKey(cur)) list.push({ y: B.y, d: (cx, cy) => {
+        const X = Math.round(B.x - 7 - cx), Y = Math.round(B.y - 14 - cy - Math.abs(Math.sin(clock * 3)) * 2);
+        ctx.globalAlpha = 0.4; ctx.drawImage(glow('#FFE45C', 14), X - 7, Y - 7); ctx.globalAlpha = 1;
+        ctx.drawImage(TLB_IMG, X, Y);
+      } });
+    } catch (e) { console.warn(e); }
+  };
+}
+window.__tlb = { get bag() { return tlbBag; } };
 window.__g = { get state() { return state; }, arcStart, get arc() { return arc; }, arcBegin: () => arc && arcBegin(arc), arcTable, ghosts: () => ghosts, hero, cam, get scale() { return SCALE; }, startPuzzle: (k) => ghosts[0] && startPuzzle(ghosts[0], k), tapAt, get P() { return P; }, get enemies() { return enemies; }, get out() { return OUTMAP; }, doAttack, get coins() { return coins; }, setCoins(n) { coins = n; drawCoins(); }, get state2() { return state; }, get cur() { return cur; }, get boss() { return boss; }, flags: () => flags, setFlag, travel, enterMap, buildLand, buildCastle, giveWeapon, get shots() { return shots; }, get eshots() { return eshots; }, hurtBoss: (n) => hurtBoss(n), get pickups() { return pickups; }, usePower, get fx() { return fx; }, setCharge(v) { powerCharge = v; }, get inmap() { return INMAP; }, homeSaved, startDeco, endDeco, decoTap, openBench, get homeDeco() { return homeDeco; }, get runeBag() { return runeBag; }, gotRune, houseSaved, get wave() { return wave; }, curW: () => curW(), get furn() { return furn; }, enterHouse, get friends() { return friends; }, startEnding: () => startEnding(), ending: () => ending, get fly() { return fly; }, startFlight, buildPond, flyTap };
 </script>
 <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script></body></html>
